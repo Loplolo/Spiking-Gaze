@@ -2,13 +2,13 @@ import argparse
 from models import KerasGazeModel, NengoGazeModel
 from camera_loop import infer_loop
 
-IMAGE_SIZE = (448, 448, 1)
 
 def main(args):
+    IMAGE_SIZE = (224, 224, 1)
 
     match args.type:
         case 'keras':
-            gazeModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3)
+            gazeModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             gazeModel.create_model()
 
         case 'nengo':
@@ -20,7 +20,7 @@ def main(args):
             if (not args.load):
                 print("Attention: If you are trying to infer using a converted model remember to set --load")
 
-            kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3)
+            kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             kerasModel.create_model()
 
             if (args.load):
@@ -37,10 +37,9 @@ def main(args):
 
     match args.action:
         case 'train':
-            gazeModel.train(args.dataset_dir, args.batch_size, args.epochs)
+            gazeModel.train(args.dataset_dir, n_epochs=args.epochs)
             if args.save:
                 gazeModel.save(args.save)
-            gazeModel.plot_history()
 
         case 'eval':
             gazeModel.eval(args.dataset_dir, args.batch_size)
