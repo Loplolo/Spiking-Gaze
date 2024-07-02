@@ -30,18 +30,19 @@ class KerasGazeModel():
     def train(self, dataset_dir, batch_size, n_epochs, train_split=0.8):
         """Loads dataset and trains the model"""
         early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-        
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs", histogram_freq=1)
+
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
 
         train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, batch_size)
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, batch_size)
 
-        self.gaze_estimation_model_history = self.gaze_estimation_model.fit(train_generator, 
-                                                                            validation_data=eval_generator,
-                                                                            verbose=1,
-                                                                            epochs=n_epochs, 
-                                                                            callbacks=[early_stopping],
-                                                                            shuffle=True)
+        self.gaze_estimation_model.fit(train_generator, 
+                                        validation_data=eval_generator,
+                                        verbose=1,
+                                        epochs=n_epochs, 
+                                        callbacks=[early_stopping, tensorboard_callback],
+                                        shuffle=True)
         
     def load(self, filename='keras.model'):
         """Wrapper for load_model"""
@@ -112,9 +113,6 @@ class KerasGazeModel():
         print(prediction)
         return prediction
     
-    def plot_history(self):
-        model_plot_informations(self.gaze_estimation_model_history)
-
     def getModel(self):
         return self.gaze_estimation_model
 
@@ -159,6 +157,9 @@ class NengoGazeModel():
     def train(self, dataset_dir, n_epochs, train_split=0.8):
         """Load dataset and train model"""
 
+        early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs", histogram_freq=1)
+
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
         
         train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, self.batch_size, nengo=True)
@@ -169,20 +170,12 @@ class NengoGazeModel():
             nengo_dl.configure_settings(stateful=False)
             nengo_dl.configure_settings(use_loop=False)
 
-            history = self.sim.fit(
-                    x=train_generator,
-                    epochs = n_epochs,
-                    validation_data=eval_generator,
-                    verbose=1,
-                    shuffle= True
-                    )   
-        print(history.history)
-        self.gaze_estimation_model_history = {'loss': history.history['probe_loss'], 'val_loss': history.history['val_probe_loss'],
-                        'accuracy' : history.history['probe_accuracy'], 'val_accuracy' : history.history['val_probe_accuracy'], 
-                        }
-
-    def plot_history(self):
-        model_plot_informations(self.gaze_estimation_model_history, nengo=True)
+            self.sim.fit(train_generator, 
+                        validation_data=eval_generator,
+                        verbose=1,
+                        epochs=n_epochs, 
+                        callbacks=[early_stopping, tensorboard_callback],
+                        shuffle=True)
 
     def load(self, filename):
         self.sim.load_params(filename)
