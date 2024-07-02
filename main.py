@@ -22,14 +22,16 @@ def main(args):
 
             kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3)
             kerasModel.create_model()
-            kerasModel.load(args.load)
+
+            if (args.load):
+                kerasModel.load(args.load)
+
             gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             gazeModel.convert(kerasModel.getModel())
             gazeModel.create_simulator()
 
     gazeModel.compile()
 
-    # da sistemare
     if (args.load and not args.type == 'converted'):
         gazeModel.load(args.load)
 
