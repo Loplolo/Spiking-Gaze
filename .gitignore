@@ -1,7 +1,7 @@
 calibration/
 __pycache__/
-dataset/
-logs/
+dataset/*
+logs/*
 *.xml
 *.keras
 *.nengo
