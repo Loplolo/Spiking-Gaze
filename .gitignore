@@ -1,0 +1,10 @@
+calibration/
+__pycache__/
+dataset/
+*.xml
+*.keras
+*.nengo
+*.model
+*.png
+TODO.md 
+Note.md
