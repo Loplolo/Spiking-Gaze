@@ -5,10 +5,11 @@ import cv2
 from keras.utils import Sequence
 import matplotlib.pyplot as plt
 import tensorflow as tf
+import gc
 
 class MPIIFaceGazeGenerator(Sequence):
     '''Generatore di dati per Keras'''
-    def __init__(self, image_paths, annotations, batch_size, image_size=(448, 448), nengo=False, n_steps=1, shuffle=True):
+    def __init__(self, image_paths, annotations, batch_size, image_size=(224, 224), nengo=False, n_steps=1, shuffle=True):
         self.image_paths = image_paths
         self.annotations = annotations
         self.batch_size = batch_size
@@ -34,6 +35,8 @@ class MPIIFaceGazeGenerator(Sequence):
             np.random.shuffle(indices)
             self.image_paths = [self.image_paths[i] for i in indices]
             self.annotations = self.annotations[indices]
+            gc.collect()
+            tf.keras.backend.clear_session()
 
     def _generate_batch(self, batch_image_paths, batch_annotations):
         images = []
@@ -81,8 +84,9 @@ class MPIIFaceGazeGenerator(Sequence):
             batch_annotations = batch_annotations.reshape((self.batch_size, 1, -1)) 
             images = np.tile(images, (1, self.n_steps, 1))
             batch_annotations = np.tile(batch_annotations, (1, self.n_steps, 1))
+
             if self.nengo:
-                return ({"input_1":images,
+                return {"input_1":images,
                         "n_steps":np.ones((self.batch_size, self.n_steps), dtype=np.int32), 
                         "conv2d.0.bias":np.ones((self.batch_size, 96, 1), dtype=np.int32),
                         "conv2d_1.0.bias":np.ones((self.batch_size, 256, 1), dtype=np.int32),
@@ -90,17 +94,11 @@ class MPIIFaceGazeGenerator(Sequence):
                         "conv2d_3.0.bias":np.ones((self.batch_size, 384, 1), dtype=np.int32),
                         "conv2d_4.0.bias":np.ones((self.batch_size, 256, 1), dtype=np.int32),
                         "dense_2.0.bias":np.ones((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
-                        },
-                        {'probe': batch_annotations} )
-        
-        # Hack from
-        # https://github.com/tensorflow/tensorflow/issues/39523#issuecomment-914352213
-        def getitem(self, index):
-            return self.__getitem__(index)
+                        }, {'probe': batch_annotations}
                 
         return images, batch_annotations
-
-def load_data(dataset_dir, train_split):
+    
+def load_data(dataset_dir, train_split, load_percentage=1.0):
     image_paths = []
     annotations = []
 
@@ -109,6 +107,10 @@ def load_data(dataset_dir, train_split):
             if file.endswith('.jpg'):
                 image_path = os.path.join(root, file)
                 image_paths.append(image_path)
+
+    total_samples = len(image_paths)
+    num_samples_to_load = int(total_samples * load_percentage)
+    image_paths = image_paths[:num_samples_to_load]
 
     for root, _, files in os.walk(dataset_dir):
         for file in files:
@@ -125,31 +127,12 @@ def load_data(dataset_dir, train_split):
                 annotation = gt - fc
                 annotations.extend(annotation)
 
-    annotations = np.array(annotations)
+    annotations = np.array(annotations)[:num_samples_to_load]
 
-    split_index = int(train_split * len(image_paths))
+    split_index = int(train_split * num_samples_to_load)
     train_image_paths = image_paths[:split_index]
     train_annotations = annotations[:split_index]
     eval_image_paths = image_paths[split_index:]
     eval_annotations = annotations[split_index:]
 
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations
-
-
-def model_plot_informations(history):
-
-    plt.plot(history.history['accuracy'], label='Accuracy (training data)')
-    plt.plot(history.history['val_accuracy'], label='Accuracy (validation data)')
-    plt.title('Accuracy')
-    plt.ylabel('Accuracy value')
-    plt.xlabel('No. epoch')
-    plt.legend(loc="upper left")
-    plt.show()
-    plt.plot(history.history['loss'], label='Error (training data)')
-    plt.plot(history.history['val_loss'], label='Error (validation data)')
-    plt.title('Error')
-    plt.ylabel('Error value')
-    plt.xlabel('No. epoch')
-    plt.legend(loc="upper left")
-    plt.show()
-
