@@ -2,21 +2,22 @@ import tensorflow as tf
 import keras
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Dropout, MaxPool2D
-from utils import MPIIFaceGazeGenerator, model_plot_informations, load_data
+from utils import MPIIFaceGazeGenerator, load_data
 from keras_spiking import ModelEnergy
 import nengo_dl
 import nengo
 from keras.callbacks import EarlyStopping
 import numpy as np
 import matplotlib.pyplot as plt
+import datetime
 
 class KerasGazeModel():
     """ANN models using keras"""
 
-    def __init__(self, input_shape, output_shape):
+    def __init__(self, input_shape, output_shape, batch_size):
         self.input_shape = input_shape
         self.output_shape = output_shape
-        
+        self.batch_size = batch_size
     def create_model(self):
         """Wrapper constructor for the estimation model(s)"""
         self.gaze_estimation_model = alexNet(self.input_shape, self.output_shape)
@@ -27,15 +28,16 @@ class KerasGazeModel():
         """Wrapper for keras compile function"""
         self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
 
-    def train(self, dataset_dir, batch_size, n_epochs, train_split=0.8):
+    def train(self, dataset_dir, n_epochs, train_split=0.8):
         """Loads dataset and trains the model"""
         early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs", histogram_freq=1)
+        log_dir = "logs/keras_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
 
-        train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, batch_size)
-        eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, batch_size)
+        train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, self.batch_size)
+        eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size)
 
         self.gaze_estimation_model.fit(train_generator, 
                                         validation_data=eval_generator,
@@ -52,7 +54,7 @@ class KerasGazeModel():
     def save(self, filename):
         """Wrapper for save_model"""
         if (self.gaze_estimation_model):
-            self.gaze_estimation_model.save(filename)
+            self.sim.save(filename)
 
     def eval(self, dataset_dir, batch_size, train_split=0.8):
 
@@ -74,7 +76,7 @@ class KerasGazeModel():
             ),
             print_warnings=False,)
 
-        # TO BE TESTED
+        # TO BE TESTED ######################################################################################
         fig, axes = plt.subplots(3, 3, subplot_kw={'projection': '3d'}, figsize=(15, 15))
         for i in range(3):
             for j in range(3):
@@ -107,6 +109,7 @@ class KerasGazeModel():
 
         plt.tight_layout()
         plt.show()
+        #######################################################################################################
 
     def predict(self, image):
         prediction = self.gaze_estimation_model.predict(image, verbose = 0)
@@ -135,8 +138,9 @@ class NengoGazeModel():
         converter = nengo_dl.Converter(model, 
                                     scale_firing_rates=scale_fr, 
                                     synapse=syn_time,
-                                    max_to_avg_pool=True, #max_to_avg_pool=True nota
-                                    swap_activations={tf.keras.activations.relu: nengo.SpikingRectifiedLinear()})
+                                    max_to_avg_pool=True, #Potenzialmente migliore performance        
+                                    swap_activations={tf.nn.relu: nengo.SpikingRectifiedLinear()}
+                                    )
 
         self.gaze_estimation_model_net = converter.net
         return converter
@@ -157,15 +161,15 @@ class NengoGazeModel():
     def train(self, dataset_dir, n_epochs, train_split=0.8):
         """Load dataset and train model"""
 
+        log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs", histogram_freq=1)
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
         
         train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, self.batch_size, nengo=True)
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size, nengo=True)
 
-        #Out of Memory problems
         with self.gaze_estimation_model_net:
             nengo_dl.configure_settings(stateful=False)
             nengo_dl.configure_settings(use_loop=False)
@@ -181,7 +185,7 @@ class NengoGazeModel():
         self.sim.load_params(filename)
 
     def save(self, filename):
-        self.gaze_estimation_model_net.save_params(filename)
+        self.sim.save_params(filename)
 
     def eval(self, dataset_dir, batch_size, train_split=0.8):
 
@@ -199,27 +203,29 @@ class NengoGazeModel():
 
 def alexNet(input_shape, output_shape):
     """Keras gaze estimation model, AlexNet"""
+
+
     inp = Input(shape=input_shape)
 
-    conv1 = Conv2D(96, (11, 11), strides=4, padding='same', activation='relu')(inp)
+    conv1 = Conv2D(96, (11, 11), strides=4, padding='same', activation='relu', bias_initializer='zeros')(inp)
     maxpool1 = MaxPool2D(pool_size=(3, 3), strides=2)(conv1)
 
-    conv2 = Conv2D(256, (5, 5), padding='same', activation='relu')(maxpool1)
+    conv2 = Conv2D(256, (5, 5), padding='same', activation='relu', bias_initializer='zeros')(maxpool1)
     maxpool2 = MaxPool2D(pool_size=(3, 3), strides=2)(conv2)
 
-    conv3 = Conv2D(384, (3, 3), padding='same', activation='relu')(maxpool2)
-    conv4 = Conv2D(384, (3, 3), padding='same', activation='relu')(conv3)
-    conv5 = Conv2D(256, (3, 3), padding='same', activation='relu')(conv4)
+    conv3 = Conv2D(384, (3, 3), padding='same', activation='relu', bias_initializer='zeros')(maxpool2)
+    conv4 = Conv2D(384, (3, 3), padding='same', activation='relu', bias_initializer='zeros')(conv3)
+    conv5 = Conv2D(256, (3, 3), padding='same', activation='relu', bias_initializer='zeros')(conv4)
     conv6 = MaxPool2D(pool_size=(3, 3), strides=2)(conv5)
 
 
     flat = Flatten()(conv6)
-    dense1 = Dense(4096, activation='relu')(flat)
+    dense1 = Dense(4096, activation='relu', bias_initializer='zeros')(flat)
     drop1 = Dropout(0.5)(dense1)
-    dense2 = Dense(4096, activation='relu')(drop1)
+    dense2 = Dense(4096, activation='relu', bias_initializer='zeros')(drop1)
     drop2 = Dropout(0.5)(dense2)
 
-    out = Dense(output_shape, activation='linear')(drop2) 
+    out = Dense(output_shape, activation='linear', bias_initializer='zeros')(drop2) 
 
     model = Model(inputs=inp, outputs=out)
 
