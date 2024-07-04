@@ -9,3 +9,4 @@ logs/*
 *.png
 TODO.md 
 Note.md
+*.npz
