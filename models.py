@@ -32,7 +32,7 @@ class KerasGazeModel():
         """Loads dataset and trains the model"""
         early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
         log_dir = "logs/keras_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True, write_images=True)
 
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
 
@@ -54,7 +54,7 @@ class KerasGazeModel():
     def save(self, filename):
         """Wrapper for save_model"""
         if (self.gaze_estimation_model):
-            self.sim.save(filename)
+            self.gaze_estimation_model.save(filename)
 
     def eval(self, dataset_dir, batch_size, train_split=0.8):
 
