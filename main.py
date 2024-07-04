@@ -7,19 +7,21 @@ def main(args):
     IMAGE_SIZE = (224, 224, 1)
 
     match args.type:
+        case 'nengo-alt':
+            pass
+
         case 'keras':
             gazeModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             gazeModel.create_model()
 
         case 'nengo':
+            kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
+            kerasModel.create_model()
             gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
-            gazeModel.create_model()
+            gazeModel.convert(kerasModel.getModel())
             gazeModel.create_simulator()
 
         case 'converted':
-            if (not args.load):
-                print("Attention: If you are trying to infer using a converted model remember to set --load")
-
             kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             kerasModel.create_model()
 
@@ -49,7 +51,7 @@ def main(args):
 
 if __name__ == '__main__':
 
-    types = ['nengo', 'keras', 'converted']
+    types = ['nengo', 'keras', 'converted', 'nengo-alt']
     actions = ['train', 'eval', 'webcam']
 
     parser = argparse.ArgumentParser(description='Train a Nengo_dl or Keras model on the MPIIFaceGaze dataset.')
