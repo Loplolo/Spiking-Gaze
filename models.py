@@ -2,7 +2,7 @@ import tensorflow as tf
 import keras
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Dropout, MaxPool2D
-from utils import MPIIFaceGazeGenerator, load_data
+from utils import MPIIFaceGazeGenerator, load_data, preprocess_image
 from keras_spiking import ModelEnergy
 import nengo_dl
 import nengo
@@ -10,6 +10,8 @@ from keras.callbacks import EarlyStopping
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime
+import cv2
+import random  
 
 class KerasGazeModel():
     """ANN models using keras"""
@@ -18,6 +20,7 @@ class KerasGazeModel():
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.batch_size = batch_size
+
     def create_model(self):
         """Wrapper constructor for the estimation model(s)"""
         self.gaze_estimation_model = alexNet(self.input_shape, self.output_shape)
@@ -55,7 +58,7 @@ class KerasGazeModel():
         """Wrapper for save_model"""
         if (self.gaze_estimation_model):
             self.gaze_estimation_model.save(filename)
-
+        
     def eval(self, dataset_dir, batch_size, train_split=0.8):
 
         _, _, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
@@ -63,8 +66,9 @@ class KerasGazeModel():
 
         results = self.gaze_estimation_model.evaluate( eval_generator, verbose = 1)
         print(results)
-        
-        energy = ModelEnergy(self.gaze_estimation_model, example_data=eval_generator)
+
+        # Lower batch size to avoid going out of memory
+        energy = ModelEnergy(self.gaze_estimation_model, example_data=eval_generator[0][0])
         energy.summary(
             columns=(
                 "name",
@@ -76,43 +80,59 @@ class KerasGazeModel():
             ),
             print_warnings=False,)
 
-        # TO BE TESTED ######################################################################################
-        fig, axes = plt.subplots(3, 3, subplot_kw={'projection': '3d'}, figsize=(15, 15))
+    def show_predictions(self, dataset_dir, train_split=0.8):
+        """Plot predictions and ground truth with images side by side"""
+        _, _, eval_image_paths, eval_annotations = load_data(dataset_dir, train_split)
+
+        fig = plt.figure(figsize=(20, 15))
+
         for i in range(3):
             for j in range(3):
-                ax = axes[i, j]
+                index = i * 3 + j
+                rand_index = random.randint(0, len(eval_image_paths) - 1)
 
-                img = eval_image_paths[i * 3 + j]
-                vector = eval_annotations[i * 3 + j]
-                predicted_vector = self.gaze_estimation_model.predict(eval_image_paths[i * 3 + j])
+                img = cv2.imread(eval_image_paths[rand_index])
+                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
+                inp_img = img.reshape(1, self.input_shape[0], self.input_shape[1], 1)
 
-                ax.imshow(img, extent=[0, 1, 0, 1], aspect='auto')
-                ax.plot(
-                    vector[0], 
-                    vector[1], 
-                    vector[2], 
-                    color='black', linewidth=2)   
+                img_ax = fig.add_subplot(3, 6, 2 * index + 2)
+                img_ax.imshow(img, cmap='gray') 
+                img_ax.axis('off')
 
-                ax.imshow(img, extent=[0, 1, 0, 1], aspect='auto')
-                ax.plot(
-                    predicted_vector[0], 
-                    predicted_vector[1], 
-                    predicted_vector[2], 
-                    color='red', linewidth=2)   
+                ax = fig.add_subplot(3, 6, 2 * index + 1, projection='3d')
 
-                ax.set_xlim(0, 1)
-                ax.set_ylim(0, 1)
-                ax.set_zlim(0, 1)
+                vector = eval_annotations[rand_index] / np.linalg.norm(eval_annotations[rand_index])
+                ax.quiver(0, 0, 0,
+                        vector[0], vector[1], vector[2],
+                        color='black', arrow_length_ratio=0.1, linewidth=1)
+
+                predicted_vector = self.gaze_estimation_model.predict(inp_img)[0]
+                predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
+                ax.quiver(0, 0, 0,
+                        predicted_vector[0], predicted_vector[1], predicted_vector[2],
+                        color='red', arrow_length_ratio=0.1, linewidth=1)
+
+                ax.view_init(elev=-90, azim=-90)  
+
+                ax.set_xlim(-1, 1)
+                ax.set_ylim(-1, 1)
+                ax.set_zlim(-1, 1)
+
                 ax.set_xlabel('X')
                 ax.set_ylabel('Y')
                 ax.set_zlabel('Z')
 
         plt.tight_layout()
         plt.show()
-        #######################################################################################################
+
 
     def predict(self, image):
+
+        image = preprocess_image(image, (self.input_shape[0], self.input_shape[1]))
+        image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
+
         prediction = self.gaze_estimation_model.predict(image, verbose = 0)
+
         print(prediction)
         return prediction
     
@@ -133,16 +153,16 @@ class NengoGazeModel():
             self.gaze_estimation_model_net = SpikingAlexNet(self.input_shape, self.output_shape)
             return self.gaze_estimation_model_net
 
-    def convert(self, model, scale_fr=1, syn_time=None):
+    def convert(self, model, scale_fr=100, syn_time=None):
         """Convert Keras model to nengo_dl network"""
         converter = nengo_dl.Converter(model, 
                                     scale_firing_rates=scale_fr, 
                                     synapse=syn_time,
-                                    max_to_avg_pool=True, #Potenzialmente migliore performance        
-                                    swap_activations={tf.nn.relu: nengo.SpikingRectifiedLinear()}
+                                    max_to_avg_pool=True, 
+                                    swap_activations={keras.activations.relu : nengo.SpikingRectifiedLinear()} # !
                                     )
-
         self.gaze_estimation_model_net = converter.net
+
         return converter
    
     def create_simulator(self):
@@ -161,8 +181,11 @@ class NengoGazeModel():
     def train(self, dataset_dir, n_epochs, train_split=0.8):
         """Load dataset and train model"""
 
+        with self.gaze_estimation_model_net:
+            nengo_dl.configure_settings(stateful=False)
+
         log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+        early_stopping = EarlyStopping(monitor='probe_val_loss', patience=10, restore_best_weights=True)
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
@@ -194,9 +217,65 @@ class NengoGazeModel():
         results = self.sim.evaluate( eval_generator, verbose = 1)
         print(results)
 
+    def show_predictions(self, dataset_dir, train_split=0.8):
+        """Plot predictions and ground truth with images side by side"""
+        _, _, eval_image_paths, eval_annotations = load_data(dataset_dir, train_split)
+
+        fig = plt.figure(figsize=(20, 15))
+        sim = nengo_dl.Simulator(self.gaze_estimation_model_net, minibatch_size=1)
+
+        for i in range(3):
+            for j in range(3):
+
+                index = i * 3 + j
+                rand_index = random.randint(0, len(eval_image_paths) - 1)
+
+                img = cv2.imread(eval_image_paths[rand_index])
+                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
+                inp_img = img.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
+
+                img_ax = fig.add_subplot(3, 6, 2 * index + 2)
+                img_ax.imshow(img, cmap='gray') 
+                img_ax.axis('off')
+
+                ax = fig.add_subplot(3, 6, 2 * index + 1, projection='3d')
+
+                vector = eval_annotations[rand_index] / np.linalg.norm(eval_annotations[rand_index])
+
+                ax.quiver(0, 0, 0,
+                        vector[0], vector[1], vector[2],
+                        color='black', arrow_length_ratio=0.1, linewidth=1)
+                
+                predicted_vector = sim.predict({"input_1" : inp_img})
+
+                # Extract only the last probed value
+                predicted_vector = predicted_vector[self.gaze_estimation_model_net.probes[0]]
+                predicted_vector = predicted_vector.reshape(3)
+                predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
+                print(predicted_vector)
+
+                ax.quiver(0, 0, 0,
+                        predicted_vector[0], predicted_vector[1], predicted_vector[2],
+                        color='red', arrow_length_ratio=0.1, linewidth=1)
+
+                ax.view_init(elev=-90, azim=-90)  
+
+                ax.set_xlim(-1, 1)
+                ax.set_ylim(-1, 1)
+                ax.set_zlim(-1, 1)
+
+                ax.set_xlabel('X')
+                ax.set_ylabel('Y')
+                ax.set_zlabel('Z')
+
+        plt.tight_layout()
+        plt.show()
+        sim.close()
+
     def predict(self, image):
-        #Ricorda di disabilitare Training (inference_only)
-        pass
+        image = preprocess_image(image, (self.input_shape[0], self.input_shape[1]))
+        image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
+        self.sim.predict({"input_1" : image})
 
     def getModel(self):
         return self.gaze_estimation_model_net
@@ -233,7 +312,7 @@ def alexNet(input_shape, output_shape):
 
 def SpikingAlexNet(input_shape, output_shape):
 
-    with nengo.Network(seed=0) as net:
+    with nengo.Network() as net:
 
         net.config[nengo.Ensemble].max_rates = nengo.dists.Choice([100])
         net.config[nengo.Ensemble].intercepts = nengo.dists.Choice([0])
@@ -284,7 +363,6 @@ def SpikingAlexNet(input_shape, output_shape):
         x = nengo_dl.Layer(tf.keras.layers.Dropout(0.5))(x, shape_in=(4096,))
 
         out = nengo_dl.Layer(tf.keras.layers.Dense(output_shape))(x, shape_in=(4096,))
-
         out_p = nengo.Probe(out, label="out_p")
 
     return net
