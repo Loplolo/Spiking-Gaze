@@ -41,37 +41,8 @@ class MPIIFaceGazeGenerator(Sequence):
     def _generate_batch(self, batch_image_paths, batch_annotations):
         images = []
         for image_path in batch_image_paths:
-
             image = cv2.imread(image_path)
-            # Crop out black pixels -> non preciso
-            y_nonzero, x_nonzero, _ = np.nonzero(image)
-
-            image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
-            image = cv2.resize(image, self.image_size)
-
-            #Crop to get a square
-            height, width, _ = image.shape
-            square_size = min(height, width)
-            if width > height:
-                x_start = (width - square_size) // 2
-                y_start = 0
-            else:
-                x_start = 0
-                y_start = (height - square_size) // 2
-
-            image = image[y_start:y_start + square_size, x_start:x_start + square_size]
-
-            # Convert to grayscale
-            '''
-            Illumination also influences the appearance of the human eye.
-            To handle this, researchers usually take gray-scale images rather
-            than RGB images as input and apply histogram equalization in the
-            gray-scale images to enhance the image.
-            '''
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-            image = cv2.equalizeHist(image)
-
-            image = image.astype('float32') / 255.0
+            image = preprocess_image(image, self.image_size)
             images.append(image)
 
         images = np.array(images)
@@ -136,3 +107,37 @@ def load_data(dataset_dir, train_split, load_percentage=1.0):
     eval_annotations = annotations[split_index:]
 
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations
+
+def preprocess_image(image, new_size):
+    # Crop out black pixels -> non preciso
+    y_nonzero, x_nonzero, _ = np.nonzero(image)
+
+    image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+    image = cv2.resize(image, new_size)
+
+    #Crop to get a square
+    height, width, _ = image.shape
+    square_size = min(height, width)
+    if width > height:
+        x_start = (width - square_size) // 2
+        y_start = 0
+    else:
+        x_start = 0
+        y_start = (height - square_size) // 2
+
+    image = image[y_start:y_start + square_size, x_start:x_start + square_size]
+
+    # Convert to grayscale
+    '''
+    Illumination also influences the appearance of the human eye.
+    To handle this, researchers usually take gray-scale images rather
+    than RGB images as input and apply histogram equalization in the
+    gray-scale images to enhance the image.
+    '''
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    image = cv2.equalizeHist(image)
+
+    image = image.astype('float32') / 255.0
+
+    return image
+
