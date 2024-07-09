@@ -1,14 +1,22 @@
 import argparse
 from models import KerasGazeModel, NengoGazeModel
 from camera_loop import infer_loop
-
+import tensorflow as tf 
 
 def main(args):
+
+    gpus = tf.config.experimental.list_physical_devices("GPU")
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+
+
     IMAGE_SIZE = (224, 224, 1)
 
     match args.type:
-        case 'nengo-alt':
-            pass
+        case 'nengo_alt':
+            gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
+            gazeModel.create_model()
+            gazeModel.create_simulator()
 
         case 'keras':
             gazeModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
@@ -46,13 +54,16 @@ def main(args):
         case 'eval':
             gazeModel.eval(args.dataset_dir, args.batch_size)
 
+        case 'show':
+            gazeModel.show_predictions(args.dataset_dir)
+
         case 'webcam':
             infer_loop(gazeModel, IMAGE_SIZE)
 
 if __name__ == '__main__':
 
-    types = ['nengo', 'keras', 'converted', 'nengo-alt']
-    actions = ['train', 'eval', 'webcam']
+    types = ['nengo', 'keras', 'converted', 'nengo_alt']
+    actions = ['train', 'eval', 'webcam', 'show']
 
     parser = argparse.ArgumentParser(description='Train a Nengo_dl or Keras model on the MPIIFaceGaze dataset.')
 
