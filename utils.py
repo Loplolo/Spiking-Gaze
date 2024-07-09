@@ -59,17 +59,21 @@ class MPIIFaceGazeGenerator(Sequence):
             if self.nengo:
                 return {"input_1":images,
                         "n_steps":np.ones((self.batch_size, self.n_steps), dtype=np.int32), 
-                        "conv2d.0.bias":np.ones((self.batch_size, 96, 1), dtype=np.int32),
-                        "conv2d_1.0.bias":np.ones((self.batch_size, 256, 1), dtype=np.int32),
-                        "conv2d_2.0.bias":np.ones((self.batch_size, 384, 1), dtype=np.int32),
-                        "conv2d_3.0.bias":np.ones((self.batch_size, 384, 1), dtype=np.int32),
-                        "conv2d_4.0.bias":np.ones((self.batch_size, 256, 1), dtype=np.int32),
-                        "dense_2.0.bias":np.ones((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
+                        "conv2d.0.bias":np.zeros((self.batch_size, 96, 1), dtype=np.int32),
+                        "conv2d_1.0.bias":np.zeros((self.batch_size, 256, 1), dtype=np.int32),
+                        "conv2d_2.0.bias":np.zeros((self.batch_size, 384, 1), dtype=np.int32),
+                        "conv2d_3.0.bias":np.zeros((self.batch_size, 384, 1), dtype=np.int32),
+                        "conv2d_4.0.bias":np.zeros((self.batch_size, 256, 1), dtype=np.int32),
+                        "dense_2.0.bias":np.zeros((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
                         }, {'probe': batch_annotations}
                 
         return images, batch_annotations
-    
-def load_data(dataset_dir, train_split, load_percentage=1.0):
+import os
+import numpy as np
+import pandas as pd
+from sklearn.utils import shuffle
+
+def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
     image_paths = []
     annotations = []
 
@@ -98,7 +102,10 @@ def load_data(dataset_dir, train_split, load_percentage=1.0):
                 annotation = gt - fc
                 annotations.extend(annotation)
 
-    annotations = np.array(annotations)[:num_samples_to_load]
+    annotations = np.array(annotations)
+    
+    annotations = annotations[:num_samples_to_load]
+    image_paths, annotations = shuffle(image_paths, annotations, random_state=seed)
 
     split_index = int(train_split * num_samples_to_load)
     train_image_paths = image_paths[:split_index]
@@ -107,6 +114,7 @@ def load_data(dataset_dir, train_split, load_percentage=1.0):
     eval_annotations = annotations[split_index:]
 
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations
+
 
 def preprocess_image(image, new_size):
     # Crop out black pixels -> non preciso
