@@ -31,13 +31,13 @@ class KerasGazeModel():
         """Wrapper for keras compile function"""
         self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
 
-    def train(self, dataset_dir, n_epochs, train_split=0.8):
+    def train(self, dataset, n_epochs, train_split=0.8):
         """Loads dataset and trains the model"""
         early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
         log_dir = "logs/keras_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True, write_images=True)
 
-        train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
+        train_image_paths, train_annotations, eval_image_paths, eval_annotations  = dataset
 
         train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, self.batch_size)
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size)
@@ -59,15 +59,14 @@ class KerasGazeModel():
         if (self.gaze_estimation_model):
             self.gaze_estimation_model.save(filename)
         
-    def eval(self, dataset_dir, batch_size, train_split=0.8):
+    def eval(self, dataset, batch_size):
 
-        _, _, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
+        _, _, eval_image_paths, eval_annotations  = dataset
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, batch_size)
 
         results = self.gaze_estimation_model.evaluate( eval_generator, verbose = 1)
         print(results)
 
-        # Lower batch size to avoid going out of memory
         energy = ModelEnergy(self.gaze_estimation_model, example_data=eval_generator[0][0])
         energy.summary(
             columns=(
@@ -80,9 +79,9 @@ class KerasGazeModel():
             ),
             print_warnings=False,)
 
-    def show_predictions(self, dataset_dir, train_split=0.8):
+    def show_predictions(self, dataset):
         """Plot predictions and ground truth with images side by side"""
-        _, _, eval_image_paths, eval_annotations = load_data(dataset_dir, train_split)
+        _, _, eval_image_paths, eval_annotations = dataset
 
         fig = plt.figure(figsize=(20, 15))
 
@@ -106,7 +105,9 @@ class KerasGazeModel():
                         vector[0], vector[1], vector[2],
                         color='black', arrow_length_ratio=0.1, linewidth=1)
 
-                predicted_vector = self.gaze_estimation_model.predict(inp_img)[0]
+                predicted_vector = self.gaze_estimation_model.predict(inp_img)[-1]
+                print(predicted_vector)
+
                 predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
                 ax.quiver(0, 0, 0,
                         predicted_vector[0], predicted_vector[1], predicted_vector[2],
@@ -153,13 +154,13 @@ class NengoGazeModel():
             self.gaze_estimation_model_net = SpikingAlexNet(self.input_shape, self.output_shape)
             return self.gaze_estimation_model_net
 
-    def convert(self, model, scale_fr=100, syn_time=None):
+    def convert(self, model, scale_fr=100, synapse=None):
         """Convert Keras model to nengo_dl network"""
         converter = nengo_dl.Converter(model, 
                                     scale_firing_rates=scale_fr, 
-                                    synapse=syn_time,
+                                    synapse=synapse,
                                     max_to_avg_pool=True, 
-                                    swap_activations={keras.activations.relu : nengo.SpikingRectifiedLinear()} # !
+                                    swap_activations={keras.activations.relu : nengo.SpikingRectifiedLinear()}
                                     )
         self.gaze_estimation_model_net = converter.net
 
@@ -178,17 +179,17 @@ class NengoGazeModel():
     def compile(self, optimizer='adam', loss='mean_absolute_error', ):
         self.sim.compile(loss=loss, optimizer=optimizer, metrics=['accuracy'])
 
-    def train(self, dataset_dir, n_epochs, train_split=0.8):
+    def train(self, dataset, n_epochs):
         """Load dataset and train model"""
 
         with self.gaze_estimation_model_net:
             nengo_dl.configure_settings(stateful=False)
 
         log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        early_stopping = EarlyStopping(monitor='probe_val_loss', patience=10, restore_best_weights=True)
+        early_stopping = EarlyStopping(monitor='val_probe_loss', patience=10, restore_best_weights=True)
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
-        train_image_paths, train_annotations, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
+        train_image_paths, train_annotations, eval_image_paths, eval_annotations  = dataset
         
         train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, self.batch_size, nengo=True)
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size, nengo=True)
@@ -210,16 +211,17 @@ class NengoGazeModel():
     def save(self, filename):
         self.sim.save_params(filename)
 
-    def eval(self, dataset_dir, batch_size, train_split=0.8):
+    def eval(self, dataset, batch_size):
 
-        _, _, eval_image_paths, eval_annotations  = load_data(dataset_dir, train_split)
+        _, _, eval_image_paths, eval_annotations  = dataset
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, batch_size, nengo=True)
         results = self.sim.evaluate( eval_generator, verbose = 1)
         print(results)
 
-    def show_predictions(self, dataset_dir, train_split=0.8):
+    def show_predictions(self, dataset):
         """Plot predictions and ground truth with images side by side"""
-        _, _, eval_image_paths, eval_annotations = load_data(dataset_dir, train_split)
+
+        _, _, eval_image_paths, eval_annotations = dataset
 
         fig = plt.figure(figsize=(20, 15))
         sim = nengo_dl.Simulator(self.gaze_estimation_model_net, minibatch_size=1)
@@ -232,7 +234,8 @@ class NengoGazeModel():
 
                 img = cv2.imread(eval_image_paths[rand_index])
                 img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
-                inp_img = img.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
+                inp_img = img.reshape(1, 1, self.input_shape[0] * self.input_shape[1])
+                #inp_img = np.tile(inp_img, (1, n_steps, 1))
 
                 img_ax = fig.add_subplot(3, 6, 2 * index + 2)
                 img_ax.imshow(img, cmap='gray') 
@@ -250,7 +253,7 @@ class NengoGazeModel():
 
                 # Extract only the last probed value
                 predicted_vector = predicted_vector[self.gaze_estimation_model_net.probes[0]]
-                predicted_vector = predicted_vector.reshape(3)
+                predicted_vector = predicted_vector[0][-1]
                 predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
                 print(predicted_vector)
 
@@ -273,6 +276,11 @@ class NengoGazeModel():
         sim.close()
 
     def predict(self, image):
+        with self.gaze_estimation_model_net:
+            nengo_dl.configure_settings(stateful=False)
+            nengo_dl.configure_settings(use_loop=False)
+            nengo_dl.configure_settings(trainable=False)
+
         image = preprocess_image(image, (self.input_shape[0], self.input_shape[1]))
         image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
         self.sim.predict({"input_1" : image})
@@ -281,6 +289,7 @@ class NengoGazeModel():
         return self.gaze_estimation_model_net
 
 def alexNet(input_shape, output_shape):
+
     """Keras gaze estimation model, AlexNet"""
 
 
