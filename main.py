@@ -2,6 +2,7 @@ import argparse
 from models import KerasGazeModel, NengoGazeModel
 from camera_loop import infer_loop
 import tensorflow as tf 
+from utils import load_data
 
 def main(args):
 
@@ -11,6 +12,9 @@ def main(args):
 
 
     IMAGE_SIZE = (224, 224, 1)
+
+    #load dataset, fixed seed to avoid data contaminations after saving
+    dataset = load_data(args.dataset_dir, args.train_split, seed=42)
 
     match args.type:
         case 'nengo_alt':
@@ -47,15 +51,15 @@ def main(args):
 
     match args.action:
         case 'train':
-            gazeModel.train(args.dataset_dir, n_epochs=args.epochs)
+            gazeModel.train(dataset, n_epochs=args.epochs)
             if args.save:
                 gazeModel.save(args.save)
 
         case 'eval':
-            gazeModel.eval(args.dataset_dir, args.batch_size)
+            gazeModel.eval(dataset, args.batch_size)
 
         case 'show':
-            gazeModel.show_predictions(args.dataset_dir)
+            gazeModel.show_predictions(dataset)
 
         case 'webcam':
             infer_loop(gazeModel, IMAGE_SIZE)
@@ -73,6 +77,8 @@ if __name__ == '__main__':
                         help='choose one of {}'.format(actions))
     
     parser.add_argument('--dataset_dir', type=str, default=".\dataset\MPIIFaceGaze", help='Path to the dataset directory')
+    parser.add_argument('--train_split', type=float, default=0.8, help='Train split')
+
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs to train')
 
