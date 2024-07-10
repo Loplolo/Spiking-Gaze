@@ -191,7 +191,6 @@ class NengoGazeModel():
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size, nengo=True)
 
         with self.gaze_estimation_model_net:
-            nengo_dl.configure_settings(stateful=False)
             nengo_dl.configure_settings(use_loop=False)
 
             self.sim.fit(train_generator, 
