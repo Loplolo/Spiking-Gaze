@@ -159,7 +159,7 @@ class NengoGazeModel():
         converter = nengo_dl.Converter(model, 
                                     scale_firing_rates=scale_fr, 
                                     synapse=synapse,
-                                    inference_only = inference_only
+                                    inference_only = inference_only,
                                     )
         
         self.gaze_estimation_model_net = converter.net
@@ -191,7 +191,6 @@ class NengoGazeModel():
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size, nengo=True)
 
         with self.gaze_estimation_model_net:
-            nengo_dl.configure_settings(use_loop=False)
 
             self.sim.fit(train_generator, 
                         validation_data=eval_generator,
@@ -271,9 +270,6 @@ class NengoGazeModel():
         sim.close()
 
     def predict(self, image):
-        with self.gaze_estimation_model_net:
-            nengo_dl.configure_settings(use_loop=False)
-            nengo_dl.configure_settings(trainable=False)
 
         image = preprocess_image(image, (self.input_shape[0], self.input_shape[1]))
         image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
@@ -321,7 +317,6 @@ def SpikingAlexNet(input_shape, output_shape):
         net.config[nengo.Connection].synapse = None
 
         neuron_type = nengo.SpikingRectifiedLinear()
-        nengo_dl.configure_settings(stateful=False)
 
         inp = nengo.Node(np.zeros(np.prod(input_shape)))
 
