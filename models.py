@@ -32,7 +32,7 @@ class KerasGazeModel():
         self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
 
     def train(self, dataset, n_epochs, train_split=0.8):
-        """Loads dataset and trains the model"""
+        """Create dataset generator and trains the model"""
         early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
         log_dir = "logs/keras_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True, write_images=True)
@@ -180,10 +180,7 @@ class NengoGazeModel():
         self.sim.compile(loss=loss, optimizer=optimizer, metrics=['accuracy'])
 
     def train(self, dataset, n_epochs):
-        """Load dataset and train model"""
-
-        with self.gaze_estimation_model_net:
-            nengo_dl.configure_settings(stateful=False)
+        """Create generator and train model"""
 
         log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         early_stopping = EarlyStopping(monitor='val_probe_loss', patience=10, restore_best_weights=True)
