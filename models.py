@@ -113,6 +113,9 @@ class KerasGazeModel():
                         predicted_vector[0], predicted_vector[1], predicted_vector[2],
                         color='red', arrow_length_ratio=0.1, linewidth=1)
 
+                print(vector)
+                print(predicted_vector)
+
                 ax.view_init(elev=-90, azim=-90)  
 
                 ax.set_xlim(-1, 1)
@@ -242,17 +245,19 @@ class NengoGazeModel():
                 ax = fig.add_subplot(3, 6, 2 * index + 1, projection='3d')
 
                 vector = eval_annotations[rand_index] / np.linalg.norm(eval_annotations[rand_index])
-
+         
                 ax.quiver(0, 0, 0,
                         vector[0], vector[1], vector[2],
                         color='black', arrow_length_ratio=0.1, linewidth=1)
                 
-                predicted_vector = sim.predict({"input_1" : inp_img})
+                predicted_vector = self.sim.predict({"input_1" : inp_img})
 
                 # Extract only the last probed value
                 predicted_vector = predicted_vector[self.gaze_estimation_model_net.probes[0]]
                 predicted_vector = predicted_vector[0][-1]
                 predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
+
+                print(vector)
                 print(predicted_vector)
 
                 ax.quiver(0, 0, 0,
@@ -271,7 +276,7 @@ class NengoGazeModel():
 
         plt.tight_layout()
         plt.show()
-        sim.close()
+        self.sim.close()
 
     def predict(self, image):
 
