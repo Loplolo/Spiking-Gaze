@@ -106,7 +106,6 @@ class KerasGazeModel():
                         color='black', arrow_length_ratio=0.1, linewidth=1)
 
                 predicted_vector = self.gaze_estimation_model.predict(inp_img)[-1]
-                print(predicted_vector)
 
                 predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
                 ax.quiver(0, 0, 0,
@@ -184,8 +183,8 @@ class NengoGazeModel():
     def train(self, dataset, n_epochs):
         """Create generator and train model"""
 
-        log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         early_stopping = EarlyStopping(monitor='val_probe_loss', patience=10, restore_best_weights=True)
+        log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = dataset
