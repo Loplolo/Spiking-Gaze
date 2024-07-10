@@ -41,7 +41,7 @@ def main(args):
                 kerasModel.load(args.load)
 
             gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
-            gazeModel.convert(kerasModel.getModel())
+            gazeModel.convert(kerasModel.getModel(), inference_only=True)
             gazeModel.create_simulator()
 
     gazeModel.compile()
