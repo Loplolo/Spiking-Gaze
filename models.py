@@ -272,7 +272,6 @@ class NengoGazeModel():
 
     def predict(self, image):
         with self.gaze_estimation_model_net:
-            nengo_dl.configure_settings(stateful=False)
             nengo_dl.configure_settings(use_loop=False)
             nengo_dl.configure_settings(trainable=False)
 
@@ -286,7 +285,6 @@ class NengoGazeModel():
 def alexNet(input_shape, output_shape):
 
     """Keras gaze estimation model, AlexNet"""
-
 
     inp = Input(shape=input_shape)
 
