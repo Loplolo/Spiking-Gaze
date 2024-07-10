@@ -209,6 +209,7 @@ class NengoGazeModel():
 
         _, _, eval_image_paths, eval_annotations  = dataset
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, batch_size, nengo=True)
+
         results = self.sim.evaluate( eval_generator, verbose = 1)
         print(results)
 
@@ -218,7 +219,10 @@ class NengoGazeModel():
         _, _, eval_image_paths, eval_annotations = dataset
 
         fig = plt.figure(figsize=(20, 15))
-        sim = nengo_dl.Simulator(self.gaze_estimation_model_net, minibatch_size=1)
+
+        if(self.batch_size != 1):
+            print("Couldn't predict value, batch_size must be 1 for inference with nengo_dl models")
+            return
 
         for i in range(3):
             for j in range(3):

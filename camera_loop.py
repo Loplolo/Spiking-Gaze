@@ -7,6 +7,10 @@ import json
 
 def infer_loop(model, image_size):
 
+    if(model.batch_size != 1):
+        print("Couldn't predict value, batch_size must be 1 for inference with nengo_dl models")
+        return
+
     video = cv2.VideoCapture(0)
     cv2.namedWindow('display')
 
@@ -47,7 +51,7 @@ def infer_loop(model, image_size):
         try:
             cv2.imshow("gray_face", gray_face)
             prediction = infer_direction(model,  gray_face, image_size)
-            #print(prediction)
+            print(prediction)
             display = draw_vectors(np.array(prediction))
 
         except Exception as e:
