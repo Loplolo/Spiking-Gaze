@@ -154,16 +154,15 @@ class NengoGazeModel():
             self.gaze_estimation_model_net = SpikingAlexNet(self.input_shape, self.output_shape)
             return self.gaze_estimation_model_net
 
-    def convert(self, model, scale_fr=100, synapse=None):
+    def convert(self, model, scale_fr=1, synapse=None, inference_only=False):
         """Convert Keras model to nengo_dl network"""
         converter = nengo_dl.Converter(model, 
                                     scale_firing_rates=scale_fr, 
                                     synapse=synapse,
-                                    max_to_avg_pool=True, 
-                                    swap_activations={keras.activations.relu : nengo.SpikingRectifiedLinear()}
+                                    inference_only = inference_only
                                     )
+        
         self.gaze_estimation_model_net = converter.net
-
         return converter
    
     def create_simulator(self):
