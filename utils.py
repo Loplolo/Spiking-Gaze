@@ -42,6 +42,11 @@ class MPIIFaceGazeGenerator(Sequence):
         images = []
         for image_path in batch_image_paths:
             image = cv2.imread(image_path)
+
+            # Cut out black pixel, non preciso
+            y_nonzero, x_nonzero, _ = np.nonzero(image)
+            image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+
             image = preprocess_image(image, self.image_size)
             images.append(image)
 
@@ -115,12 +120,11 @@ def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
 
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations
 
-
 def preprocess_image(image, new_size):
-    # Crop out black pixels -> non preciso
-    y_nonzero, x_nonzero, _ = np.nonzero(image)
 
-    image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+    # TODO: Considerare il caso di un'immagine intera, ma non censurata
+    #       e il caso di un frame contenente solo la bbox della faccia
+
     image = cv2.resize(image, new_size)
 
     #Crop to get a square

@@ -2,7 +2,7 @@ import tensorflow as tf
 import keras
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Dropout, MaxPool2D
-from utils import MPIIFaceGazeGenerator, load_data, preprocess_image
+from utils import MPIIFaceGazeGenerator, preprocess_image
 from keras_spiking import ModelEnergy
 import nengo_dl
 import nengo
@@ -91,6 +91,11 @@ class KerasGazeModel():
                 rand_index = random.randint(0, len(eval_image_paths) - 1)
 
                 img = cv2.imread(eval_image_paths[rand_index])
+
+                # Cut out black pixels
+                y_nonzero, x_nonzero, _ = np.nonzero(img)
+                img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+
                 img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
                 inp_img = img.reshape(1, self.input_shape[0], self.input_shape[1], 1)
 
@@ -230,6 +235,11 @@ class NengoGazeModel():
                 rand_index = random.randint(0, len(eval_image_paths) - 1)
 
                 img = cv2.imread(eval_image_paths[rand_index])
+
+                # Cut out black pixels
+                y_nonzero, x_nonzero, _ = np.nonzero(img)
+                img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+
                 img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
                 inp_img = img.reshape(1, 1, self.input_shape[0] * self.input_shape[1])
                 #inp_img = np.tile(inp_img, (1, n_steps, 1))
