@@ -4,7 +4,7 @@ import os
 import numpy as np
 import re
 import json
-
+from utils import preprocess_image
 def infer_loop(model, image_size):
 
     if(model.batch_size != 1):
@@ -27,8 +27,7 @@ def infer_loop(model, image_size):
 
     while True:
 
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray_frame, 1.3, 5)
+        faces = face_cascade.detectMultiScale(frame, 1.3, 5)
         ok, frame = video.read()
         display = frame.copy()
 
@@ -39,7 +38,7 @@ def infer_loop(model, image_size):
             for (x,y,w,h) in faces:
                 cv2.rectangle(display,(x,y),(x+w,y+h),(255,255,0),2)
                 center = (w//2, h//2)
-                gray_face = gray_frame[y:y+h, x:x+w]
+                face = frame[y:y+h, x:x+w]
 
         except Exception as exc:
             print(exc)
@@ -49,9 +48,8 @@ def infer_loop(model, image_size):
         cv2.imshow("display", display)
 
         try:
-            cv2.imshow("gray_face", gray_face)
-            prediction = infer_direction(model,  gray_face, image_size)
-            print(prediction)
+            cv2.imshow("face", face)
+            prediction = infer_direction(model,  face, image_size)
             display = draw_vectors(np.array(prediction))
 
         except Exception as e:
@@ -67,15 +65,10 @@ def infer_loop(model, image_size):
 
 
 
-def infer_direction(model, gray_face, image_size):
+def infer_direction(model, face, image_size):
     
-    image = cv2.resize(gray_face, (image_size[0], image_size[1]))
-    image = cv2.equalizeHist(image)
-    image = image.astype('float32') / 255.0
-
-    image = image.reshape(1, image.shape[0], image.shape[1], 1)
+    image = preprocess_image(face, image_size[:2], censored=False)
     prediction = model.predict(image)
-
     return prediction
 
 def draw_vectors(prediction, center):

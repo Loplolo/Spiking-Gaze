@@ -131,11 +131,8 @@ class KerasGazeModel():
 
     def predict(self, image):
 
-        image = preprocess_image(image, (self.input_shape[0], self.input_shape[1]))
-        image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
-
+        image = image.reshape(1, self.input_shape[0], self.input_shape[1], 1)
         prediction = self.gaze_estimation_model.predict(image, verbose = 0)
-
         print(prediction)
         return prediction
     
@@ -279,7 +276,6 @@ class NengoGazeModel():
 
     def predict(self, image):
 
-        image = preprocess_image(image, (self.input_shape[0], self.input_shape[1]))
         image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
         self.sim.predict({"input_1" : image})
 

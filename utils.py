@@ -135,7 +135,6 @@ def preprocess_image(image, new_size):
 
     image = image[y_start:y_start + square_size, x_start:x_start + square_size]
 
-    # Convert to grayscale
     '''
     Illumination also influences the appearance of the human eye.
     To handle this, researchers usually take gray-scale images rather
