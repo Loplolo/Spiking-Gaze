@@ -2,7 +2,7 @@ import tensorflow as tf
 import keras
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Dropout, MaxPool2D
-from utils import MPIIFaceGazeGenerator, preprocess_image
+from utils import MPIIFaceGazeGenerator, preprocess_image, undistort_image
 from keras_spiking import ModelEnergy
 import nengo_dl
 import nengo
@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import datetime
 import cv2
 import random  
+import os
 
 class KerasGazeModel():
     """ANN models using keras"""
@@ -89,14 +90,19 @@ class KerasGazeModel():
             for j in range(3):
                 index = i * 3 + j
                 rand_index = random.randint(0, len(eval_image_paths) - 1)
+                im_path = eval_image_paths[rand_index]
+                img = cv2.imread(im_path)
 
-                img = cv2.imread(eval_image_paths[rand_index])
 
-                # Cut out black pixels
+                calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
+                img = undistort_image(img, calib_path)
+                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]), calib_path)
+
+                # Cut out black pixels  
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
+
                 img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
 
-                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
                 inp_img = img.reshape(1, self.input_shape[0], self.input_shape[1], 1)
 
                 img_ax = fig.add_subplot(3, 6, 2 * index + 2)
@@ -135,9 +141,10 @@ class KerasGazeModel():
 
 
     def predict(self, image):
-
         image = image.reshape(1, self.input_shape[0], self.input_shape[1], 1)
         prediction = self.gaze_estimation_model.predict(image, verbose = 0)
+        prediction = prediction[-1] / np.linalg.norm(prediction)
+
         print(prediction)
         return prediction
     
@@ -165,7 +172,6 @@ class NengoGazeModel():
                                     synapse=synapse,
                                     inference_only = inference_only,
                                     )
-        
         self.gaze_estimation_model_net = converter.net
         return converter
    
@@ -233,16 +239,17 @@ class NengoGazeModel():
 
                 index = i * 3 + j
                 rand_index = random.randint(0, len(eval_image_paths) - 1)
-
-                img = cv2.imread(eval_image_paths[rand_index])
+                im_path = eval_image_paths[rand_index]
+                img = cv2.imread(im_path)
 
                 # Cut out black pixels
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
                 img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
 
-                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
+                calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
+                img = undistort_image(img, calib_path)
+                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]), calib_path)
                 inp_img = img.reshape(1, 1, self.input_shape[0] * self.input_shape[1])
-                #inp_img = np.tile(inp_img, (1, n_steps, 1))
 
                 img_ax = fig.add_subplot(3, 6, 2 * index + 2)
                 img_ax.imshow(img, cmap='gray') 
@@ -287,7 +294,15 @@ class NengoGazeModel():
     def predict(self, image):
 
         image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
-        self.sim.predict({"input_1" : image})
+
+        prediction = self.sim.predict({"input_1" : image}, verbose = 0)
+        predicted_vector = prediction[self.gaze_estimation_model_net.probes[0]]
+        predicted_vector = predicted_vector[0][-1]
+        predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
+
+        print(predicted_vector)
+        return predicted_vector
+    
 
     def getModel(self):
         return self.gaze_estimation_model_net
@@ -377,4 +392,3 @@ def SpikingAlexNet(input_shape, output_shape):
         out_p = nengo.Probe(out, label="out_p")
 
     return net
-

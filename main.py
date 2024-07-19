@@ -62,7 +62,7 @@ def main(args):
             gazeModel.show_predictions(dataset)
 
         case 'webcam':
-            infer_loop(gazeModel, IMAGE_SIZE)
+            infer_loop(gazeModel, IMAGE_SIZE, calib_path="calibration/calibration.json")
 
 if __name__ == '__main__':
 
