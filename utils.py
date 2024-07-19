@@ -6,6 +6,12 @@ from keras.utils import Sequence
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import gc
+import os
+import numpy as np
+import pandas as pd
+from sklearn.utils import shuffle
+import json 
+import scipy.io
 
 class MPIIFaceGazeGenerator(Sequence):
     '''Generatore di dati per Keras'''
@@ -16,7 +22,6 @@ class MPIIFaceGazeGenerator(Sequence):
         self.image_size = image_size
         self.shuffle = shuffle
         self.nengo = nengo
-
         self.n_steps = n_steps
         self.on_epoch_end()
 
@@ -47,6 +52,9 @@ class MPIIFaceGazeGenerator(Sequence):
             y_nonzero, x_nonzero, _ = np.nonzero(image)
             image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
 
+            # Pre-Process
+            calib_path = os.path.dirname(os.path.dirname(image_path)) + "\Calibration\Camera.mat"
+            image = undistort_image(image, calib_path)
             image = preprocess_image(image, self.image_size)
             images.append(image)
 
@@ -73,10 +81,7 @@ class MPIIFaceGazeGenerator(Sequence):
                         }, {'probe': batch_annotations}
                 
         return images, batch_annotations
-import os
-import numpy as np
-import pandas as pd
-from sklearn.utils import shuffle
+
 
 def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
     image_paths = []
@@ -120,14 +125,42 @@ def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
 
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations
 
+def load_camera_calibration(calibration_file):
+    """Loads camera calibration file"""
+
+    _ , filetype = os.path.splitext(calibration_file)
+
+    if filetype == '.mat':
+        with open(calibration_file, 'rb') as file:
+            calib_data = scipy.io.loadmat(file)
+        
+        camera_matrix = np.array(calib_data['cameraMatrix'])
+        dist_coeffs = np.array(calib_data['distCoeffs'])
+    
+    elif filetype == '.json':
+        with open(calibration_file, 'rb') as file:
+            calib_data = json.load(file)
+        
+        camera_matrix = np.array(calib_data['camera_matrix'])
+        dist_coeffs = np.array(calib_data['dist_coeffs'])
+    
+    return camera_matrix, dist_coeffs
+
+def undistort_image(image, calibration_file):
+    """Fixes distortion in images caused by camera differences"""
+
+    camera_matrix, dist_coeffs = load_camera_calibration(calibration_file)
+    height, width = image.shape[:2]
+    new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, (width, height), 1, (width, height))
+    undistorted_image = cv2.undistort(image, camera_matrix, dist_coeffs, None, new_camera_matrix)
+    
+    return undistorted_image
+
 def preprocess_image(image, new_size):
 
-    # TODO: Considerare il caso di un'immagine intera, ma non censurata
-    #       e il caso di un frame contenente solo la bbox della faccia
-
     image = cv2.resize(image, new_size)
-
-    #Crop to get a square
+    
+    # Crop to get a square
     height, width, _ = image.shape
     square_size = min(height, width)
     if width > height:
@@ -139,16 +172,9 @@ def preprocess_image(image, new_size):
 
     image = image[y_start:y_start + square_size, x_start:x_start + square_size]
 
-    '''
-    Illumination also influences the appearance of the human eye.
-    To handle this, researchers usually take gray-scale images rather
-    than RGB images as input and apply histogram equalization in the
-    gray-scale images to enhance the image.
-    '''
+    # Convert in grayscale
     image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     image = cv2.equalizeHist(image)
-
+    
     image = image.astype('float32') / 255.0
-
     return image
-
