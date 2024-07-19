@@ -151,9 +151,11 @@ def undistort_image(image, calibration_file):
 
     camera_matrix, dist_coeffs = load_camera_calibration(calibration_file)
     height, width = image.shape[:2]
-    new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, (width, height), 1, (width, height))
+    new_camera_matrix, roi  = cv2.getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, (width, height), 1, (width, height))
     undistorted_image = cv2.undistort(image, camera_matrix, dist_coeffs, None, new_camera_matrix)
-    
+    x, y, w, h = roi
+    undistorted_image = undistorted_image[y : y + h, x : x + w]
+
     return undistorted_image
 
 def preprocess_image(image, new_size):

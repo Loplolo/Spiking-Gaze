@@ -96,12 +96,12 @@ class KerasGazeModel():
 
                 calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
                 img = undistort_image(img, calib_path)
-                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]), calib_path)
 
                 # Cut out black pixels  
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
-
                 img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+
+                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
 
                 inp_img = img.reshape(1, self.input_shape[0], self.input_shape[1], 1)
 
@@ -242,13 +242,15 @@ class NengoGazeModel():
                 im_path = eval_image_paths[rand_index]
                 img = cv2.imread(im_path)
 
+                calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
+                img = undistort_image(img, calib_path)
+
                 # Cut out black pixels
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
                 img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
 
-                calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
-                img = undistort_image(img, calib_path)
-                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]), calib_path)
+                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
+
                 inp_img = img.reshape(1, 1, self.input_shape[0] * self.input_shape[1])
 
                 img_ax = fig.add_subplot(3, 6, 2 * index + 2)
