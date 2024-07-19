@@ -110,10 +110,11 @@ def record_loop(path):
         sys.exit()
 
     img_count = 0
-    for file in os.path.walk(path):
-        num = int(re.search('file(\d*)', file).group(1))  # assuming filename is "filexxx.txt"
-        img_count = num if num > img_count else img_count
-    
+    for root, _, files in os.walk(path):
+        for file in files:
+            num = int(re.search('Face_(\d*).jpg', os.path.join(root, file)).group(1)) 
+            img_count = num if num > img_count else img_count
+        
     face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
     while True:
@@ -137,10 +138,9 @@ def record_loop(path):
         cv2.putText(display, "FPS : " + str(int(fps)), (15, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (50, 170, 50), 2)
 
         cv2.imshow("display", display)
-        try:
+
+        if gray_face:
             cv2.imshow("gray_face", gray_face)
-        except:
-            print("No face detected")
 
         k = cv2.waitKey(1) & 0xff
         
@@ -162,12 +162,6 @@ def record_loop(path):
     cv2.destroyAllWindows()
     video.release()
 
-if __name__ == '__main__':
-    #record_loop("./")
-    from models import KerasGazeModel
-    kerasModel = KerasGazeModel(input_shape=(448, 448, 1), output_shape=3)
-    kerasModel.create_model()
-    kerasModel.load("model.keras")
-    kerasModel.compile()
-    infer_loop(kerasModel, (448,448))
-
+if __name__ == "__main__":
+    path = "./dataset/custom"
+    record_loop(path)
