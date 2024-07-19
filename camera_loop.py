@@ -3,9 +3,10 @@ import cv2
 import os
 import numpy as np
 import re
-import json
+import matplotlib.pyplot as plt
 from utils import preprocess_image
-def infer_loop(model, image_size):
+
+def infer_loop(model, image_size, calib_path):
 
     if(model.batch_size != 1):
         print("Couldn't predict value, batch_size must be 1 for inference with nengo_dl models")
@@ -25,6 +26,11 @@ def infer_loop(model, image_size):
 
     face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
+    face = None
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
     while True:
 
         faces = face_cascade.detectMultiScale(frame, 1.3, 5)
@@ -33,11 +39,12 @@ def infer_loop(model, image_size):
 
         if not ok:
             break
+
         timer = cv2.getTickCount()
         try:
             for (x,y,w,h) in faces:
                 cv2.rectangle(display,(x,y),(x+w,y+h),(255,255,0),2)
-                center = (w//2, h//2)
+                center = (x + w // 2, y + h // 2)
                 face = frame[y:y+h, x:x+w]
 
         except Exception as exc:
@@ -45,46 +52,48 @@ def infer_loop(model, image_size):
 
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
         cv2.putText(display, "FPS : " + str(int(fps)), (15, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (50, 170, 50), 2)
-        cv2.imshow("display", display)
-
         try:
-            cv2.imshow("face", face)
-            prediction = infer_direction(model,  face, image_size)
-            display = draw_vectors(np.array(prediction))
+            
+            image = preprocess_image(face, image_size[:2], calib_path)
+            prediction = model.predict(image)
+
+            draw_gaze_vector_3d(ax, prediction)
+
+            cv2.imshow("display", display)
 
         except Exception as e:
-            #print("No face detected")
             print(e)
+
         k = cv2.waitKey(1) & 0xff
         
-        if k == 27: return -1 # ESC pressed, check nel main loop -> break
+        if k == 27: return -1
         elif k != 255: print(k)
 
     cv2.destroyAllWindows()
+    cv2.waitKey(0)
+
     video.release()
 
+def draw_gaze_vector_3d(ax, gaze_vector):
 
+    ax.cla()
+    ax.quiver(0, 0, 0,
+            gaze_vector[0], gaze_vector[1], gaze_vector[2],
+            color='red', arrow_length_ratio=0.1, linewidth=1)
 
-def infer_direction(model, face, image_size):
-    
-    image = preprocess_image(face, image_size[:2], censored=False)
-    prediction = model.predict(image)
-    return prediction
+    ax.view_init(elev=-90, azim=-90)  
 
-def draw_vectors(prediction, center):
-    with open('./calibration/*.json', 'r') as f:
-        calib_data = json.load(f)
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(-1, 1)
+    ax.set_zlim(-1, 1)
 
-    camera_matrix = np.array(calib_data['camera_matrix'])
-    dist_coeffs = np.array(calib_data['dist_coeffs'])
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
 
-    point_2d, _ = cv2.projectPoints(prediction, np.zeros((3,1)), np.zeros((3,1)), camera_matrix, dist_coeffs)
-    point_2d = tuple(map(tuple, point_2d.astype(int).reshape(-1, 2)))[0]
-    image = np.zeros((480, 480, 1), dtype=np.uint8)
-    cv2.circle(image, point_2d, 5, (0, 0, 255), -1)
-    cv2.imshow('Projected Point', image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    plt.draw()
+    plt.pause(0.001)
+
 
 def record_loop(path):
     
