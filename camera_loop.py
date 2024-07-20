@@ -30,11 +30,13 @@ def infer_loop(model, image_size, calib_path):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
+    camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
 
     while True:
 
-        faces = face_cascade.detectMultiScale(frame, 1.3, 5)
         ok, frame = video.read()
+        img = undistort_image(img, calib_path, camera_matrix, dist_coeffs)       
+        faces = face_cascade.detectMultiScale(frame, 1.3, 5)
         display = frame.copy()
 
         if not ok:
@@ -54,7 +56,7 @@ def infer_loop(model, image_size, calib_path):
         cv2.putText(display, "FPS : " + str(int(fps)), (15, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (50, 170, 50), 2)
         try:
             
-            image = preprocess_image(face, image_size[:2], calib_path)
+            image = preprocess_image(face, image_size[:2])
             prediction = model.predict(image)
 
             draw_gaze_vector_3d(ax, prediction)
