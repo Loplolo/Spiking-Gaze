@@ -141,14 +141,15 @@ def load_camera_calibration(calibration_file):
         
     camera_matrix = np.array(calib_data['cameraMatrix'])
     dist_coeffs = np.array(calib_data['distCoeffs'])
-    
-    
-    return camera_matrix, dist_coeffs
+    rvecs = np.array(calib_data['rvecs'])
+    tvecs = np.array(calib_data['tvecs'])
 
-def undistort_image(image, calibration_file):
+    
+    return camera_matrix, dist_coeffs, rvecs, tvecs
+
+def undistort_image(image, camera_matrix, dist_coeffs):
     """Fixes distortion in images caused by camera differences"""
 
-    camera_matrix, dist_coeffs = load_camera_calibration(calibration_file)
     height, width = image.shape[:2]
     new_camera_matrix, roi  = cv2.getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, (width, height), 1, (width, height))
     undistorted_image = cv2.undistort(image, camera_matrix, dist_coeffs, None, new_camera_matrix)
