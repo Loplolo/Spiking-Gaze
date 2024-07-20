@@ -54,7 +54,8 @@ class MPIIFaceGazeGenerator(Sequence):
 
             # Pre-Process
             calib_path = os.path.dirname(os.path.dirname(image_path)) + "\Calibration\Camera.mat"
-            image = undistort_image(image, calib_path)
+            camera_matrix, dist_coeffs, rvecs, tvecs = load_camera_calibration(calib_path)
+            image = undistort_image(image, camera_matrix, dist_coeffs)
             image = preprocess_image(image, self.image_size)
             images.append(image)
 
