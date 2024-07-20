@@ -133,16 +133,14 @@ def load_camera_calibration(calibration_file):
     if filetype == '.mat':
         with open(calibration_file, 'rb') as file:
             calib_data = scipy.io.loadmat(file)
-        
-        camera_matrix = np.array(calib_data['cameraMatrix'])
-        dist_coeffs = np.array(calib_data['distCoeffs'])
-    
+
     elif filetype == '.json':
         with open(calibration_file, 'rb') as file:
             calib_data = json.load(file)
         
-        camera_matrix = np.array(calib_data['camera_matrix'])
-        dist_coeffs = np.array(calib_data['dist_coeffs'])
+    camera_matrix = np.array(calib_data['cameraMatrix'])
+    dist_coeffs = np.array(calib_data['distCoeffs'])
+    
     
     return camera_matrix, dist_coeffs
 
