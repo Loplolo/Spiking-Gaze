@@ -32,12 +32,10 @@ def infer_loop(model, image_size, calib_path):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
 
     while True:
 
         ok, frame = video.read()
-        img = undistort_image(img, calib_path, camera_matrix, dist_coeffs)       
         faces = face_cascade.detectMultiScale(frame, 1.3, 5)
         display = frame.copy()
 
@@ -148,17 +146,15 @@ def record_loop(path):
 
         k = cv2.waitKey(1) & 0xff
         
-        if k == 27: return -1 # ESC pressed, check nel main loop -> break
-        elif k == 122:
-            # z pressed
-            pass
+        if k == 27: return -1 
+
+        # TODO: Register 3D gaze vector from looking at 2D points
+        #       on an image
 
         elif k == 115:
-            # s pressed
             img_count += 1
             fname = os.path.join(path, "Face_{}.jpg".format(img_count))
             cv2.imwrite(fname, gray_face)
-
             print(fname + " saved!")
 
         elif k != 255: print(k)

@@ -2,7 +2,7 @@ import tensorflow as tf
 import keras
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Dropout, MaxPool2D
-from utils import MPIIFaceGazeGenerator, preprocess_image, undistort_image
+from utils import MPIIFaceGazeGenerator, preprocess_image, undistort_image, load_camera_calibration
 from keras_spiking import ModelEnergy
 import nengo_dl
 import nengo
@@ -92,7 +92,6 @@ class KerasGazeModel():
                 rand_index = random.randint(0, len(eval_image_paths) - 1)
                 im_path = eval_image_paths[rand_index]
                 img = cv2.imread(im_path)
-
 
                 calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
                 camera_matrix, dist_coeffs, rvecs, tvecs = load_camera_calibration(calib_path)
