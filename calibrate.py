@@ -57,8 +57,10 @@ def record_loop(path):
             ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray_frame.shape[::-1], None, None)
             
             calibration_data = {
-                "camera_matrix": camera_matrix.tolist(),
-                "dist_coeffs": dist_coeffs.tolist()
+                "cameraMatrix": camera_matrix.tolist(),
+                "distCoeffs": dist_coeffs.tolist(),
+                "tvecs" : np.array(tvecs).tolist(),
+                "rvecs" : np.array(rvecs).tolist()
             }
                 
             with open(os.path.join(path, 'calibration.json'), 'w') as json_file:
