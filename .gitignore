@@ -1,5 +1,6 @@
 calibration/
 __pycache__/
+conda-env/
 dataset/*
 logs/*
 *.xml
@@ -10,3 +11,4 @@ logs/*
 TODO.md 
 Note.md
 *.npz
+.python-version
