@@ -9,12 +9,11 @@ Example:
 ```python3 main.py converted train --dataset_dir .\dataset\MPIIFaceGaze --save model.keras```
 
 ## Types
-types = ['nengo', 'keras', 'converted', 'nengo_alt']
+types = ['nengo', 'keras', 'converted']
 
-- Nengo = model converted first from keras AlexNet implementation and then trained
+- Nengo = Model converted first from keras AlexNet implementation and then trained
 - Keras = AlexNet implementation with keras
-- Converted = model converted from trained keras AlexNet implementation
-- Nengo_alt = WIP
+- Converted = Model converted from trained keras AlexNet implementation
 
 ## Actions
 actions = ['train', 'eval', 'webcam', 'show']
