@@ -230,10 +230,6 @@ class NengoGazeModel():
 
         fig = plt.figure(figsize=(20, 15))
 
-        if(self.batch_size != 1):
-            print("Couldn't predict value, batch_size must be 1 for inference with nengo_dl models")
-            return
-
         for i in range(3):
             for j in range(3):
 
