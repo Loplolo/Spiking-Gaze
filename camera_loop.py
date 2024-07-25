@@ -40,9 +40,16 @@ def infer_loop(model, image_size, calib_path):
 
         timer = cv2.getTickCount()
         try:
-            for (x,y,w,h) in faces:
-                cv2.rectangle(display,(x,y),(x+w,y+h),(255,255,0),2)
-                center = (x + w // 2, y + h // 2)
+            for (x, y, w, h) in faces:
+                margin = 20  
+                x -= margin
+                y -= margin
+                w += 2 * margin
+                h += 2 * margin
+
+                x, y, w, h = max(x, 0), max(y, 0), min(w, frame.shape[1] - x), min(h, frame.shape[0] - y)
+                cv2.rectangle(display, (x, y), (x + w, y + h), (255, 255, 0), 2)
+                
                 face = frame[y:y+h, x:x+w]
 
         except Exception as exc:
