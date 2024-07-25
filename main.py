@@ -59,9 +59,11 @@ def main(args):
             gazeModel.eval(dataset, args.batch_size)
 
         case 'show':
+            gazeModel.batch_size = 1
             gazeModel.show_predictions(dataset)
 
         case 'webcam':
+            gazeModel.batch_size = 1
             infer_loop(gazeModel, IMAGE_SIZE, calib_path="calibration/calibration.json")
 
 if __name__ == '__main__':

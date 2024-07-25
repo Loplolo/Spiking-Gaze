@@ -8,10 +8,6 @@ from utils import preprocess_image, undistort_image, load_camera_calibration
 
 def infer_loop(model, image_size, calib_path):
 
-    if(model.batch_size != 1):
-        print("Couldn't predict value, batch_size must be 1 for inference")
-        return
-
     video = cv2.VideoCapture(0)
     cv2.namedWindow('display')
 
