@@ -74,7 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('action', choices=actions,
                         help='choose one of {}'.format(actions))
     
-    parser.add_argument('--dataset_dir', type=str, default=".\dataset\MPIIFaceGaze", help='Path to the dataset directory')
+    parser.add_argument('--dataset_dir', type=str, default="./dataset/MPIIFaceGaze", help='Path to the dataset directory')
     parser.add_argument('--train_split', type=float, default=0.8, help='Train split')
 
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')

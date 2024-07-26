@@ -46,15 +46,17 @@ class MPIIFaceGazeGenerator(Sequence):
     def _generate_batch(self, batch_image_paths, batch_annotations):
         images = []
         for image_path in batch_image_paths:
-            image = cv2.imread(image_path)
 
+            image = cv2.imread(image_path)
+            
             # Cut out black pixel, non preciso
             y_nonzero, x_nonzero, _ = np.nonzero(image)
             image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
 
             # Pre-Process
-            calib_path = os.path.dirname(os.path.dirname(image_path)) + "\Calibration\Camera.mat"
+            calib_path = os.path.join(os.path.dirname(os.path.dirname(image_path)), "Calibration", "Camera.mat")        
             camera_matrix, dist_coeffs, rvecs, tvecs = load_camera_calibration(calib_path)
+            
             image = undistort_image(image, camera_matrix, dist_coeffs)
             image = preprocess_image(image, self.image_size)
             images.append(image)
@@ -83,10 +85,12 @@ class MPIIFaceGazeGenerator(Sequence):
                 
         return images, batch_annotations
 
-
 def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
     image_paths = []
     annotations = []
+
+    if not os.path.exists(dataset_dir):
+        raise FileNotFoundError(f"The directory {dataset_dir} does not exist.")
 
     for root, _, files in os.walk(dataset_dir):
         for file in files:

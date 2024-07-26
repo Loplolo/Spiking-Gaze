@@ -34,6 +34,7 @@ class KerasGazeModel():
 
     def train(self, dataset, n_epochs, train_split=0.8):
         """Create dataset generator and trains the model"""
+
         early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
         log_dir = "logs/keras_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True, write_images=True)
@@ -93,8 +94,9 @@ class KerasGazeModel():
                 im_path = eval_image_paths[rand_index]
                 img = cv2.imread(im_path)
 
-                calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
+                calib_path = os.path.join(os.path.dirname(os.path.dirname(im_path)), "Calibration", "Camera.mat") 
                 camera_matrix, dist_coeffs, rvecs, tvecs = load_camera_calibration(calib_path)
+                
                 img = undistort_image(img, camera_matrix, dist_coeffs)
 
                 # Cut out black pixels  
@@ -196,7 +198,7 @@ class NengoGazeModel():
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
         train_image_paths, train_annotations, eval_image_paths, eval_annotations  = dataset
-        
+
         train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, self.batch_size, nengo=True)
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size, nengo=True)
 
