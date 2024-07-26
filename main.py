@@ -17,10 +17,6 @@ def main(args):
     dataset = load_data(args.dataset_dir, args.train_split, seed=42)
 
     match args.type:
-        case 'nengo_alt':
-            gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
-            gazeModel.create_model()
-            gazeModel.create_simulator()
 
         case 'keras':
             gazeModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
