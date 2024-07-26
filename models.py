@@ -494,63 +494,6 @@ def alexNet(input_shape, output_shape):
     drop2 = Dropout(0.5)(dense2)
 
     out = Dense(output_shape, activation='linear', bias_initializer='zeros')(drop2) 
-
     model = Model(inputs=inp, outputs=out)
 
     return model
-
-def SpikingAlexNet(input_shape, output_shape):
-
-    with nengo.Network() as net:
-
-        net.config[nengo.Ensemble].max_rates = nengo.dists.Choice([100])
-        net.config[nengo.Ensemble].intercepts = nengo.dists.Choice([0])
-        net.config[nengo.Connection].synapse = None
-
-        neuron_type = nengo.SpikingRectifiedLinear()
-
-        inp = nengo.Node(np.zeros(np.prod(input_shape)))
-
-        x = nengo_dl.Layer(tf.keras.layers.Conv2D(
-            filters=96, kernel_size=11, strides=4, padding='same'))(inp, shape_in=input_shape)
-        x = nengo_dl.Layer(neuron_type)(x)
-
-        x = nengo_dl.Layer(tf.keras.layers.AveragePooling2D(
-            pool_size=(3, 3), strides=2))(x, shape_in=(56, 56, 96))
-
-        x = nengo_dl.Layer(tf.keras.layers.Conv2D(
-            filters=256, kernel_size=5, padding='same'))(x, shape_in=(28, 28, 96))
-        x = nengo_dl.Layer(neuron_type)(x)
-
-        x = nengo_dl.Layer(tf.keras.layers.AveragePooling2D(
-            pool_size=(3, 3), strides=2))(x, shape_in=(28, 28, 256))
-
-        x = nengo_dl.Layer(tf.keras.layers.Conv2D(
-            filters=384, kernel_size=3, padding='same'))(x, shape_in=(14, 14, 256))
-        x = nengo_dl.Layer(neuron_type)(x)
-
-        x = nengo_dl.Layer(tf.keras.layers.Conv2D(
-            filters=384, kernel_size=3, padding='same'))(x, shape_in=(14, 14, 384))
-        x = nengo_dl.Layer(neuron_type)(x)
-
-        x = nengo_dl.Layer(tf.keras.layers.Conv2D(
-            filters=256, kernel_size=3, padding='same'))(x, shape_in=(14, 14, 384))
-        x = nengo_dl.Layer(neuron_type)(x)
-
-        x = nengo_dl.Layer(tf.keras.layers.AveragePooling2D(
-            pool_size=(3, 3), strides=2))(x, shape_in=(14, 14, 256))
-
-        x = nengo_dl.Layer(tf.keras.layers.Flatten())(x, shape_in=(6, 6, 256))
-
-        x = nengo_dl.Layer(tf.keras.layers.Dense(4096))(x, shape_in=(6*6*256,))
-        x = nengo_dl.Layer(neuron_type)(x)
-        x = nengo_dl.Layer(tf.keras.layers.Dropout(0.5))(x, shape_in=(4096,))
-
-        x = nengo_dl.Layer(tf.keras.layers.Dense(4096))(x, shape_in=(4096,))
-        x = nengo_dl.Layer(neuron_type)(x)
-        x = nengo_dl.Layer(tf.keras.layers.Dropout(0.5))(x, shape_in=(4096,))
-
-        out = nengo_dl.Layer(tf.keras.layers.Dense(output_shape))(x, shape_in=(4096,))
-        out_p = nengo.Probe(out, label="out_p")
-
-    return net
