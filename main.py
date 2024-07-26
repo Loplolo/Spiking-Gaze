@@ -4,25 +4,38 @@ from camera_loop import infer_loop
 import tensorflow as tf 
 from utils import load_data
 
-def main(args):
+##
+# @file main.py
+#
+# @brief Model training and evaluation for artificial and spiking neural networks for Gaze estimation
+#
+# @mainpage Spiking Gaze
+#
+# @section description_main Description
+# Program to train, infer and evaluate neural network models for 
+# Deep Appearance-Based Gaze Estimation
 
+def main(args):
+    """! Main program entry"""
     gpus = tf.config.experimental.list_physical_devices("GPU")
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
 
+    IMAGE_SIZE = (224, 224, 1) # Half size for less memory usage
 
-    IMAGE_SIZE = (224, 224, 1)
-
-    #load dataset, fixed seed to avoid data contaminations after saving
+    # Fixed seed to avoid data contamination after saving
     dataset = load_data(args.dataset_dir, args.train_split, seed=42)
 
+    # Argument parsing
     match args.type:
 
         case 'keras':
+            # Keras neural network model
             gazeModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             gazeModel.create_model()
 
         case 'nengo':
+            # Trained converted keras model in nengo_dl
             kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             kerasModel.create_model()
             gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
@@ -30,6 +43,7 @@ def main(args):
             gazeModel.create_simulator()
 
         case 'converted':
+            # Keras trained and then converted to nengo_dl
             kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             kerasModel.create_model()
 
@@ -47,18 +61,24 @@ def main(args):
 
     match args.action:
         case 'train':
+            # Train model
             gazeModel.train(dataset, n_epochs=args.epochs)
             if args.save:
                 gazeModel.save(args.save)
 
         case 'eval':
+            # Evaluate model
             gazeModel.eval(dataset, args.batch_size)
 
         case 'show':
+            # Show examples from the evaluation dataset
+            # With 3d vector plots
             gazeModel.batch_size = 1
             gazeModel.show_predictions(dataset)
 
         case 'webcam':
+            # Start webcam stream to infer
+            # gaze direction
             gazeModel.batch_size = 1
             infer_loop(gazeModel, IMAGE_SIZE, calib_path="calibration/calibration.json")
 
