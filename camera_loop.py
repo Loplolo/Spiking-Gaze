@@ -15,7 +15,7 @@ def infer_loop(model, image_size, calib_path):
         print("Could not open video")
         sys.exit()
     ok, frame = video.read()
-    camera_matrix, dist_coeffs, _ , _ = load_camera_calibration(calib_path)
+    camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
     frame = undistort_image(frame, camera_matrix, dist_coeffs)       
 
     if not ok:

@@ -13,7 +13,7 @@ from utils import load_data
 #
 # @section description_main Description
 # Program to train, infer and evaluate neural network models for 
-# Deep Appearance-Based Gaze Estimation
+# Full Face Deep Appearance-Based Gaze Estimation
 
 def main(args):
     """! Main program entry"""
@@ -40,6 +40,10 @@ def main(args):
             kerasModel.create_model()
             gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             gazeModel.convert(kerasModel.getModel())
+
+            if args.action == "show" or args.action == "webcam":
+                gazeModel.batch_size = 1
+
             gazeModel.create_simulator()
 
         case 'converted':
@@ -52,6 +56,10 @@ def main(args):
 
             gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
             gazeModel.convert(kerasModel.getModel(), inference_only=True)
+
+            if args.action == "show" or args.action == "webcam":
+                gazeModel.batch_size = 1
+
             gazeModel.create_simulator()
 
     gazeModel.compile()
@@ -73,7 +81,6 @@ def main(args):
         case 'show':
             # Show examples from the evaluation dataset
             # With 3d vector plots
-            gazeModel.batch_size = 1
             gazeModel.show_predictions(dataset)
 
         case 'webcam':
