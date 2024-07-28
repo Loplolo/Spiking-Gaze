@@ -99,7 +99,7 @@ class MPIIFaceGazeGenerator(Sequence):
 
             # Load camera calibration
             calib_path = os.path.dirname(os.path.dirname(image_path)) + "\Calibration\Camera.mat"
-            camera_matrix, dist_coeffs, rvecs, tvecs = load_camera_calibration(calib_path)
+            camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
 
             # Image undistortion based on camera
             image = undistort_image(image, camera_matrix, dist_coeffs)

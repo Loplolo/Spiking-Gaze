@@ -59,8 +59,6 @@ def record_loop(path):
             calibration_data = {
                 "cameraMatrix": camera_matrix.tolist(),
                 "distCoeffs": dist_coeffs.tolist(),
-                "tvecs" : np.array(tvecs).tolist(),
-                "rvecs" : np.array(rvecs).tolist()
             }
                 
             with open(os.path.join(path, 'calibration.json'), 'w') as json_file:
