@@ -98,7 +98,7 @@ class MPIIFaceGazeGenerator(Sequence):
             image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
 
             # Load camera calibration
-            calib_path = os.path.dirname(os.path.dirname(image_path)) + "\Calibration\Camera.mat"
+            calib_path = os.path.join(os.path.dirname(os.path.join(os.path.dirname(image_path))), "Calibration" , "Camera.mat")
             camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
 
             # Image undistortion based on camera
@@ -107,7 +107,7 @@ class MPIIFaceGazeGenerator(Sequence):
             # Image pre-processing
             image = preprocess_image(image, self.image_size)
             images.append(image)
-
+            
         images = np.array(images)
 
         # Reshaping to match input
@@ -215,14 +215,10 @@ def load_camera_calibration(calibration_file):
         with open(calibration_file, 'rb') as file:
             calib_data = scipy.io.loadmat(file)
 
-    elif filetype == '.json':
-        with open(calibration_file, 'rb') as file:
-            calib_data = json.load(file)
-        
-    camera_matrix = np.array(calib_data['cameraMatrix'])
-    dist_coeffs = np.array(calib_data['distCoeffs'])
+        camera_matrix = np.array(calib_data['cameraMatrix'])
+        dist_coeffs = np.array(calib_data['distCoeffs'])
 
-    return camera_matrix, dist_coeffs
+        return camera_matrix, dist_coeffs
 
 def undistort_image(image, camera_matrix, dist_coeffs):
     """!
@@ -256,6 +252,7 @@ def preprocess_image(image, new_size):
     # Crop to get a square image
     height, width, _ = image.shape
     square_size = min(height, width)
+
     if width > height:
         x_start = (width - square_size) // 2
         y_start = 0

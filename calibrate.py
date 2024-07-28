@@ -4,8 +4,8 @@ import numpy as np
 import os
 import sys 
 import json
-
-path = "./calibration"                           
+import scipy.io
+import argparse
 
 def record_loop(path):
     img_count=0
@@ -60,10 +60,10 @@ def record_loop(path):
                 "cameraMatrix": camera_matrix.tolist(),
                 "distCoeffs": dist_coeffs.tolist(),
             }
-                
-            with open(os.path.join(path, 'calibration.json'), 'w') as json_file:
-                json.dump(calibration_data, json_file, indent=4)
 
+            os.makedirs(path, exist_ok=True)
+            
+            scipy.io.savemat(os.path.join(path, 'Camera.mat'), calibration_data)
             print("Calibration data saved")
 
         cv2.imshow("display", img)
@@ -75,4 +75,7 @@ def record_loop(path):
     video.release()
 
 if __name__ == '__main__':
-    record_loop(path)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--calibration_path', type=str, default='./dataset/custom/p00/Calibration', help='Path to save calibration data')
+    args = parser.parse_args()
+    record_loop(args.calibration_path)

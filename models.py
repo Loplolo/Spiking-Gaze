@@ -381,7 +381,7 @@ class NengoGazeModel():
                 img = cv2.imread(im_path)
 
                 # Image undistortion
-                calib_path = os.path.dirname(os.path.dirname(im_path)) + "\Calibration\Camera.mat"
+                calib_path = os.path.join(os.path.dirname(os.path.dirname(im_path)), "Calibration", "Camera.mat")
                 camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
                 img = undistort_image(img, camera_matrix, dist_coeffs)
                 
