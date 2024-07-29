@@ -1,0 +1,252 @@
+import cv2
+import os
+import re
+import tkinter as tk
+import numpy as np
+import json
+import argparse
+import sys
+from utils import load_camera_calibration
+import colorsys
+import dlib
+
+class GazeRecorder:
+    def __init__(self):
+        self.screen_gaze_point = None
+        self._window_created = False
+        self._initialize_tkinter()
+
+    def _initialize_tkinter(self):
+        if not self._window_created:
+            self.root = tk.Tk()
+            self.root.attributes('-fullscreen', True)
+            self.canvas = tk.Canvas(self.root, bg='#D3D3D3', highlightthickness=0)
+            self.canvas.pack(fill=tk.BOTH, expand=True)
+            self.canvas.bind("<Motion>", self._draw_circle)
+            self.canvas.bind("<Button-1>", self._on_click)
+            self.canvas.bind('<Button-3>', sys.exit)
+            self._window_created = True
+            self._fade_duration = 3000
+            self._steps = 100  
+            self._step_duration = self._fade_duration // (2 * self._steps)  
+            self._fade_in_progress = False
+            self._start_fading()
+
+    def _start_fading(self):
+        if not self._fade_in_progress:
+            self._fade_in_progress = True
+            self._fade_cycle()
+
+    def _fade_cycle(self):
+        self._fade_in('black', 'gray', self._steps, self._fade_out)
+
+    def _fade_in(self, start_color, end_color, steps, callback):
+        start_rgb = self._color_to_rgb(start_color)
+        end_rgb = self._color_to_rgb(end_color)
+        for step in range(steps):
+            t = step / (steps - 1)
+            interpolated_color = self._interpolate_color(start_rgb, end_rgb, t)
+            self.root.after(step * self._step_duration, lambda color=self._rgb_to_color(interpolated_color): self.canvas.config(bg=color))
+        self.root.after(steps * self._step_duration, callback)
+
+    def _fade_out(self):
+        self._fade_in('gray', 'black', self._steps, self._fade_cycle)
+
+    def _color_to_rgb(self, color):
+        return tuple(int(self.root.winfo_rgb(color)[i] / 256) for i in range(3))
+
+    def _rgb_to_color(self, rgb):
+        return f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
+
+    def _interpolate_color(self, start_rgb, end_rgb, t):
+        return (
+            int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * t),
+            int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * t),
+            int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * t)
+        )
+
+    def _on_click(self, event):
+        self.screen_gaze_point = (event.x, event.y)        
+        self.root.quit()
+
+    def _draw_circle(self, event):
+        self.canvas.delete("circle")
+        self.canvas.create_oval(event.x - 20, event.y - 20, event.x + 20, event.y + 20, outline='red', fill="red", width=2, tags="circle")
+
+    def start_recording(self):
+        self._initialize_tkinter()
+        self.root.mainloop()
+        return self.screen_gaze_point
+
+    def stop_recording(self):
+        if self._window_created:
+            self.root.quit()
+            self.root.destroy()
+            self._window_created = False
+
+class FaceProcessor:
+    def __init__(self, path, calibration_file):
+        self.path = path
+        self.cam_matrix, _ = load_camera_calibration(calibration_file)
+        self.fx, self.fy = self.cam_matrix[0][0], self.cam_matrix[1][1]
+
+        self.video_capture = cv2.VideoCapture(0)
+        self.face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+        self.detector = dlib.get_frontal_face_detector()
+        self.predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
+        self.img_index = self._get_initial_img_index()
+
+        if not self.video_capture.isOpened():
+            print("Cannot open video")
+            sys.exit()
+
+    def _get_initial_img_index(self):
+        img_index = 0
+        for root, _, files in os.walk(self.path):
+            for file in files:
+                match = re.search(r'(\d+).jpg', os.path.join(root, file))
+                if match:
+                    num = int(match.group(1))
+                    img_index = max(num, img_index)
+        return img_index
+
+    def process_gaze_point(self, gaze_point, screen_width, screen_height, real_screen_height, camera_distance):
+        if gaze_point:
+            
+            # Adjust gaze point coordinates to be relative to the center of the screen
+            gaze_point_x, gaze_point_y = gaze_point
+            gaze_point_x = gaze_point_x - screen_width / 2
+            gaze_point_x = - gaze_point_x * (real_screen_height / screen_height) # mm
+
+            gaze_point_y = gaze_point_y * (real_screen_height / screen_height) - camera_distance # mm
+            
+            gaze_point_x = float("%.6f" % gaze_point_x)
+            gaze_point_y = float("%.6f" % gaze_point_y)
+
+            # Get camera frame dimensions
+            cam_width_px = self.video_capture.get(cv2.CAP_PROP_FRAME_WIDTH)
+            cam_height_px = self.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
+            last_face = None
+            face_detected = False  
+            frame_skip_counter = 0  
+
+            while not face_detected:
+                ok, frame = self.video_capture.read()
+                if not ok:
+                    break
+
+                # Skip some frames to avoid processing the same face multiple times
+                frame_skip_counter += 1
+                if frame_skip_counter % 10 != 0:
+                    continue
+
+                # Convert frame to grayscale
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
+
+                for (x, y, w, h) in faces:
+
+                    margin = 30  
+                    x -= margin
+                    y -= margin
+                    w += 2 * margin
+                    h += 2 * margin
+
+                    x, y, w, h = max(x, 0), max(y, 0), min(w, frame.shape[1] - x), min(h, frame.shape[0] - y)
+
+                    face_rect = dlib.rectangle(x, y, x + w, y + h)
+                    face = frame[y:y + h, x:x + w]
+
+                    if face is not None:
+
+                        # Check if the current face is similar to the last processed face
+                        if last_face is not None and np.array_equal(face, last_face):
+                            continue
+
+                        last_face = face.copy()
+
+                        # Detect facial landmarks
+                        shape = self.predictor(gray, face_rect)
+                        landmarks = [(shape.part(i).x, shape.part(i).y) for i in range(68)]
+
+                        # Approximate pixel -> mm conversion using average eyes distance
+                        left_eye = ((shape.part(36).x + shape.part(39).x) / 2, (shape.part(36).y + shape.part(39).y) / 2)
+                        right_eye = ((shape.part(42).x + shape.part(45).x) / 2, (shape.part(42).y + shape.part(45).y) / 2)
+
+                        eye_distance_pixels = ((right_eye[0] - left_eye[0])**2 + (right_eye[1] - left_eye[1])**2)**0.5 
+                        average_eye_distance_mm = 63
+                        pixels_to_mm = average_eye_distance_mm / eye_distance_pixels
+
+                        # Face center
+                        center_x_pixels = sum([pt[0] for pt in landmarks]) / len(landmarks)
+                        center_y_pixels = sum([pt[1] for pt in landmarks]) / len(landmarks)
+
+                        # Calculate face center distance from the camera center
+                        camera_center_pixels = (cam_width_px / 2, cam_width_px/2)
+                        face_center_pixels = (center_x_pixels - camera_center_pixels[0], center_y_pixels - camera_center_pixels[0]) 
+
+                        # Pixel -> mm conversion usign the approximate value
+                        face_center_x = face_center_pixels[0] * pixels_to_mm 
+                        face_center_y = face_center_pixels[1] * pixels_to_mm 
+
+                        # Approximate face depth
+                        distance = ( self.fx * pixels_to_mm )
+
+                        # Save the detected face image
+                        self.img_index += 1
+                        filename = os.path.join(self.path, str(self.img_index).zfill(4) + ".jpg")
+                        cv2.imwrite(filename, face)
+                        print(f"{filename} saved!")
+
+                        # Save relative filename in the annotations file
+                        relative_filename = os.path.relpath(filename, start=os.path.join(filename, '..', '..'))
+
+                        with open(os.path.join(self.path, 'annotations.txt'), 'a') as file:
+                            file.write(f"{relative_filename}" + " 0" * 20 + f" {face_center_x} {face_center_y} {distance} {gaze_point_x} {gaze_point_y} 0\n")
+                            print(f"Face center at ({face_center_x}, {face_center_y}, {distance}), Gaze target at ({gaze_point_x}, {gaze_point_y}, 0)")
+
+                        face_detected = True 
+                        break  # Break out of the for loop once a face is saved
+
+def main():
+
+    parser = argparse.ArgumentParser(description="Face gaze tracking with distance estimation.")
+
+    parser.add_argument('--dataset_dir', type=str, default='./dataset/custom', help='Directory to save faces.')
+    parser.add_argument('--id', type=str, default="p00", help="Person's identificative." )
+    parser.add_argument('--day', type=str, default="day01", help="Same day identificative." )
+
+    # Assumptions linked to the experiments 
+    # TODO: Save those properly in a .mat file with
+    # translation and rotation vectors instead
+    parser.add_argument('--real_screen_height', type=float, default=175, help="Screen height in mm." )
+    parser.add_argument('--camera_distance', type=float, default=5, help="Laptop camera's y distance from screen in mm, assumed coplanar." )
+
+    args = parser.parse_args()
+
+    # Separate different people's and days images with MPIIFaceGaze format
+    dataset_path = os.path.join(args.dataset_dir , args.id, args.day)
+
+    os.makedirs(dataset_path, exist_ok=True)
+
+    # Get calibration file path with MPIIFaceGaze format
+    calib_file =  os.path.join(args.dataset_dir, args.id, "Calibration", "Camera.mat")
+
+    face_processor = FaceProcessor(dataset_path, calib_file)
+    gaze_recorder = GazeRecorder()
+    
+    screen_width = gaze_recorder.root.winfo_screenwidth()
+    screen_height = gaze_recorder.root.winfo_screenheight()
+    
+    while True:
+        print("Please click on the screen to record a new gaze point.")
+        gaze_point= gaze_recorder.start_recording()
+
+        if gaze_point:
+            face_processor.process_gaze_point(gaze_point, screen_width, screen_height, args.real_screen_height, args.camera_distance)
+
+        gaze_recorder.stop_recording()
+
+if __name__ == "__main__":
+    main()
