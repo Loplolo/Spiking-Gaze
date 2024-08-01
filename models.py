@@ -162,8 +162,8 @@ class KerasGazeModel():
 
                 # Image undistortion
                 calib_path = os.path.join(os.path.dirname(os.path.dirname(im_path)), "Calibration", "Camera.mat") 
-                camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
-                img = undistort_image(img, camera_matrix, dist_coeffs)
+                calib_data = load_calibration(calib_path)
+                img = undistort_image(img, calib_data["cameraMatrix"], calib_data["distCoeffs"])
 
                 # Cut out black pixels  
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
@@ -381,10 +381,10 @@ class NengoGazeModel():
                 img = cv2.imread(im_path)
 
                 # Image undistortion
-                calib_path = os.path.join(os.path.dirname(os.path.dirname(im_path)), "Calibration", "Camera.mat")
-                camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
-                img = undistort_image(img, camera_matrix, dist_coeffs)
-                
+                calib_path = os.path.join(os.path.dirname(os.path.dirname(im_path)), "Calibration", "Camera.mat") 
+                calib_data = load_calibration(calib_path)
+                img = undistort_image(img, calib_data["cameraMatrix"], calib_data["distCoeffs"])
+
                 # Cut out black pixels
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
                 img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]

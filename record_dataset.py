@@ -1,3 +1,8 @@
+"""
+@file gaze_recorder.py
+@brief Implementation of the GazeRecorder class to track and record screen gaze points using Tkinter.
+"""
+
 import cv2
 import os
 import re
@@ -6,11 +11,12 @@ import numpy as np
 import json
 import argparse
 import sys
-from utils import load_camera_calibration
+from utils import load_calibration
 import colorsys
 import dlib
 
 class GazeRecorder:
+
     def __init__(self):
         self.screen_gaze_point = None
         self._window_created = False
@@ -85,10 +91,15 @@ class GazeRecorder:
             self._window_created = False
 
 class FaceProcessor:
-    def __init__(self, path, calibration_file):
+    
+    def __init__(self, path, calib_folder_path):
         self.path = path
-        self.cam_matrix, _ = load_camera_calibration(calibration_file)
-        self.fx, self.fy = self.cam_matrix[0][0], self.cam_matrix[1][1]
+        self.camera = load_calibration(os.path.join(calib_folder_path, "Camera.mat"))
+        self.screenSize = load_calibration(os.path.join(calib_folder_path, "screenSize.mat"))
+        self.monitorPose = load_calibration(os.path.join(calib_folder_path, "monitorPose.mat"))
+        
+        # Focal length in pixels from  calibrated camera matrix
+        self.fx, self.fy = self.camera["cameraMatrix"][0][0], self.camera["cameraMatrix"][1][1]
 
         self.video_capture = cv2.VideoCapture(0)
         self.face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
@@ -110,18 +121,23 @@ class FaceProcessor:
                     img_index = max(num, img_index)
         return img_index
 
-    def process_gaze_point(self, gaze_point, screen_width, screen_height, real_screen_height, camera_distance):
+    def process_gaze_point(self, gaze_point):
         if gaze_point:
             
             # Adjust gaze point coordinates to be relative to the center of the screen
-            gaze_point_x, gaze_point_y = gaze_point
-            gaze_point_x = gaze_point_x - screen_width / 2
-            gaze_point_x = - gaze_point_x * (real_screen_height / screen_height) # mm
+            sx = (self.screenSize["width_mm"] / self.screenSize["width_pixel"])[0][0]
+            sy = (self.screenSize["height_mm"] / self.screenSize["height_pixel"])[0][0]
 
-            gaze_point_y = gaze_point_y * (real_screen_height / screen_height) - camera_distance # mm
-            
-            gaze_point_x = float("%.6f" % gaze_point_x)
-            gaze_point_y = float("%.6f" % gaze_point_y)
+
+            # Pixel to mm conversion
+            scaling_matrix = np.array([[sx, 0, 0],[0, sy, 0], [0, 0,  1]])
+            rotation_matrix, _ = cv2.Rodrigues(self.monitorPose["rvects"])
+            translation_vector = self.monitorPose["tvecs"]
+
+            screen_point_3d = np.array([[gaze_point[0], gaze_point[1], 0]], dtype=np.float32)
+
+            # Screen CRS -> Centered Camera CRS
+            camera_gaze_point = np.dot(rotation_matrix, np.dot(scaling_matrix, screen_point_3d.T)) + translation_vector
 
             # Get camera frame dimensions
             cam_width_px = self.video_capture.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -183,7 +199,7 @@ class FaceProcessor:
                         center_y_pixels = sum([pt[1] for pt in landmarks]) / len(landmarks)
 
                         # Calculate face center distance from the camera center
-                        camera_center_pixels = (cam_width_px / 2, cam_width_px/2)
+                        camera_center_pixels = (cam_width_px / 2, cam_width_px / 2)
                         face_center_pixels = (center_x_pixels - camera_center_pixels[0], center_y_pixels - camera_center_pixels[0]) 
 
                         # Pixel -> mm conversion usign the approximate value
@@ -191,7 +207,7 @@ class FaceProcessor:
                         face_center_y = face_center_pixels[1] * pixels_to_mm 
 
                         # Approximate face depth
-                        distance = ( self.fx * pixels_to_mm )
+                        distance = ( self.fx * pixels_to_mm )                        
 
                         # Save the detected face image
                         self.img_index += 1
@@ -203,8 +219,8 @@ class FaceProcessor:
                         relative_filename = os.path.relpath(filename, start=os.path.join(filename, '..', '..'))
 
                         with open(os.path.join(self.path, 'annotations.txt'), 'a') as file:
-                            file.write(f"{relative_filename}" + " 0" * 20 + f" {face_center_x} {face_center_y} {distance} {gaze_point_x} {gaze_point_y} 0\n")
-                            print(f"Face center at ({face_center_x}, {face_center_y}, {distance}), Gaze target at ({gaze_point_x}, {gaze_point_y}, 0)")
+                            file.write(f"{relative_filename}" + " 0" * 20 + f" {face_center_x} {face_center_y} {distance} {camera_gaze_point[0][0]} {camera_gaze_point[1][0]} {camera_gaze_point[2][0]}\n")
+                            print(f"Face center at ({face_center_x}, {face_center_y}, {distance}), Gaze target at ({camera_gaze_point[0][0]}, {camera_gaze_point[1][0]}, {camera_gaze_point[2][0]})")
 
                         face_detected = True 
                         break  # Break out of the for loop once a face is saved
@@ -217,12 +233,6 @@ def main():
     parser.add_argument('--id', type=str, default="p00", help="Person's identificative." )
     parser.add_argument('--day', type=str, default="day01", help="Same day identificative." )
 
-    # Assumptions linked to the experiments 
-    # TODO: Save those properly in a .mat file with
-    # translation and rotation vectors instead
-    parser.add_argument('--real_screen_height', type=float, default=175, help="Screen height in mm." )
-    parser.add_argument('--camera_distance', type=float, default=5, help="Laptop camera's y distance from screen in mm, assumed coplanar." )
-
     args = parser.parse_args()
 
     # Separate different people's and days images with MPIIFaceGaze format
@@ -230,21 +240,18 @@ def main():
 
     os.makedirs(dataset_path, exist_ok=True)
 
-    # Get calibration file path with MPIIFaceGaze format
-    calib_file =  os.path.join(args.dataset_dir, args.id, "Calibration", "Camera.mat")
+    # Get calibration folder path (MPIIFaceGaze format)
+    calib_path =  os.path.join(args.dataset_dir, args.id, "Calibration")
 
-    face_processor = FaceProcessor(dataset_path, calib_file)
+    face_processor = FaceProcessor(dataset_path, calib_path)
     gaze_recorder = GazeRecorder()
-    
-    screen_width = gaze_recorder.root.winfo_screenwidth()
-    screen_height = gaze_recorder.root.winfo_screenheight()
-    
+        
     while True:
         print("Please click on the screen to record a new gaze point.")
         gaze_point= gaze_recorder.start_recording()
 
         if gaze_point:
-            face_processor.process_gaze_point(gaze_point, screen_width, screen_height, args.real_screen_height, args.camera_distance)
+            face_processor.process_gaze_point(gaze_point)
 
         gaze_recorder.stop_recording()
 

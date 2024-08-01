@@ -4,7 +4,7 @@ import os
 import numpy as np
 import re
 import matplotlib.pyplot as plt
-from utils import preprocess_image, undistort_image, load_camera_calibration
+from utils import preprocess_image, undistort_image, load_calibration
 
 def infer_loop(model, image_size, calib_path):
 
@@ -15,8 +15,9 @@ def infer_loop(model, image_size, calib_path):
         print("Could not open video")
         sys.exit()
     ok, frame = video.read()
-    camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
-    frame = undistort_image(frame, camera_matrix, dist_coeffs)       
+
+    calib_data = load_calibration(calib_path)
+    frame = undistort_image(frame, calib_data["cameraMatrix"], calib_data["distCoeffs"])       
 
     if not ok:
         print("Cannot read video")

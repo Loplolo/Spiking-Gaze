@@ -98,11 +98,9 @@ class MPIIFaceGazeGenerator(Sequence):
             image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
 
             # Load camera calibration
-            calib_path = os.path.join(os.path.dirname(os.path.join(os.path.dirname(image_path))), "Calibration" , "Camera.mat")
-            camera_matrix, dist_coeffs = load_camera_calibration(calib_path)
-
-            # Image undistortion based on camera
-            image = undistort_image(image, camera_matrix, dist_coeffs)
+            calib_path = os.path.join(os.path.dirname(os.path.dirname(image_path)), "Calibration", "Camera.mat") 
+            calib_data = load_calibration(calib_path)
+            image = undistort_image(image, calib_data["cameraMatrix"], calib_data["distCoeffs"])
 
             # Image pre-processing
             image = preprocess_image(image, self.image_size)
@@ -198,15 +196,13 @@ def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
 
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations
 
-def load_camera_calibration(calibration_file):
+def load_calibration(calibration_file):
     """! 
-    @brief Loads camera calibration file
+    @brief Loads calibration file
 
     @param calibration_file  Path to calibration file
 
-    @return camera_matrix  Camera's intrinsic matrix
-    @return dist_coeffs    Camera's distortion coefficients
-    
+    @return calib_data  Dictionary containing the calibration data    
     """
 
     _ , filetype = os.path.splitext(calibration_file)
@@ -215,10 +211,7 @@ def load_camera_calibration(calibration_file):
         with open(calibration_file, 'rb') as file:
             calib_data = scipy.io.loadmat(file)
 
-        camera_matrix = np.array(calib_data['cameraMatrix'])
-        dist_coeffs = np.array(calib_data['distCoeffs'])
-
-        return camera_matrix, dist_coeffs
+        return calib_data
 
 def undistort_image(image, camera_matrix, dist_coeffs):
     """!
