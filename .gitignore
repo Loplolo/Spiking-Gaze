@@ -1,15 +1,10 @@
 calibration/
 __pycache__/
-conda-env/
 dataset/*
 logs/*
-*.dat
-*.xml
 *.keras
 *.nengo
 *.model
-*.png
 TODO.md 
 Note.md
 *.npz
-.python-version
