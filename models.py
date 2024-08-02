@@ -1,18 +1,25 @@
-import tensorflow as tf
-import keras
-from tensorflow.keras import Model
-from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Dropout, MaxPool2D
-from utils import MPIIFaceGazeGenerator, preprocess_image, undistort_image, load_camera_calibration
-from keras_spiking import ModelEnergy
-import nengo_dl
-import nengo
-from keras.callbacks import EarlyStopping
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime
 import cv2
 import random  
 import os
+
+import tensorflow as tf
+from tensorflow.keras import Model
+from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Dropout, MaxPool2D
+
+import nengo_dl
+import nengo
+
+import keras
+import keras.backend as K
+from keras.callbacks import EarlyStopping
+from keras.metrics import Mean
+
+from keras_spiking import ModelEnergy
+
+from utils import MPIIFaceGazeGenerator, preprocess_image, undistort_image, load_calibration
 
 ##
 # @file models.py
@@ -54,14 +61,14 @@ class KerasGazeModel():
         self.gaze_estimation_model.summary()
         return self.gaze_estimation_model
 
-    def compile(self, optimizer='adam', loss='mean_absolute_error'):
+    def compile(self, optimizer='adam', loss='mean_squared_error'):
         """!
         @brief Wrapper for keras compile function
         
         @param optimizer  Optimizer to be used by the model, default is Adam
-        @param loss       Loss function to be used by the model, default is mean_absolute_error
+        @param loss       Loss function to be used by the model, default is mean_squared_error
         """
-        self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
+        self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', AngularDistance()])
 
     def train(self, dataset, n_epochs):
         """!
@@ -254,14 +261,14 @@ class NengoGazeModel():
         self.batch_size = batch_size
         self.sim = None
 
-    def compile(self, optimizer='adam', loss='mean_absolute_error', ):
+    def compile(self, optimizer='adam', loss='mean_squared_error', ):
         """!
         @brief Wrapper for nengo_dl compile function
         
         @param optimizer  Optimizer to be used by the model, default is Adam
-        @param loss       Loss function to be used by the model, default is mean_absolute_error
+        @param loss       Loss function to be used by the model, default is mean_squared_error
         """
-        self.sim.compile(loss=loss, optimizer=optimizer, metrics=['accuracy'])
+        self.sim.compile(loss=loss, optimizer=optimizer, metrics=['accuracy', AngularDistance()])
 
     def convert(self, model, scale_fr=1, synapse=None, inference_only=False):
         """!
@@ -497,3 +504,40 @@ def alexNet(input_shape, output_shape):
     model = Model(inputs=inp, outputs=out)
 
     return model
+
+class AngularDistanceSD(tf.keras.metrics.Metric):
+    """
+    ! @brief Angular Distance's SD
+    Keras metric for Angular Distance's standard deviation for models
+    evaluation
+    """
+    def __init__(self, name='AngularDistanceSD', **kwargs):
+        super(AngularDistanceSD, self).__init__(name=name, **kwargs)
+        self.angles = self.add_weight(name='angles', initializer='zeros')
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true_norm = K.l2_normalize(y_true, axis=-1)
+        y_pred_norm = K.l2_normalize(y_pred, axis=-1)
+        cosine_similarity = K.sum(y_true_norm * y_pred_norm, axis=-1)
+        value = tf.math.acos(cosine_similarity)
+        self.angles.assign_add(value)
+
+    def result(self):
+        return np.std(self.angles)
+
+class AngularDistance(Mean):
+    """
+    ! @brief Angular Distance
+    Keras metric for Angular Distance for models evaluation
+    """
+    def __init__(self, name='AngularDistance', **kwargs):
+        super(AngularDistance, self).__init__(name=name, **kwargs)
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true_norm = K.l2_normalize(y_true, axis=-1)
+        y_pred_norm = K.l2_normalize(y_pred, axis=-1)
+        cosine_similarity = K.sum(y_true_norm * y_pred_norm, axis=-1)
+        value = tf.math.acos(cosine_similarity)
+        super().update_state(value, sample_weight)
+
+
