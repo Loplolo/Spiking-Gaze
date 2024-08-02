@@ -1,3 +1,10 @@
+# Requirements
+
+Tested with python 3.10.14
+Install Python libraries with ```pip install -r requirements.txt```
+
+MPIIFaceGaze dataset: https://perceptualui.org/files/datasets/MPIIFaceGaze.zip ( unzip in ./dataset/ )
+
 # Usage
 
 General usage: 

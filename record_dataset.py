@@ -1,7 +1,10 @@
-"""
-@file gaze_recorder.py
-@brief Implementation of the GazeRecorder class to track and record screen gaze points using Tkinter.
-"""
+
+##
+# gaze_recorder.py
+#
+# Implementation of the GazeRecorder class to track and record screen gaze points using Tkinter.
+#
+#
 
 import cv2
 import os

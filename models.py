@@ -22,31 +22,29 @@ from keras_spiking import ModelEnergy
 from utils import MPIIFaceGazeGenerator, preprocess_image, undistort_image, load_calibration
 
 ##
-# @file models.py
+# models.py
 #
-# @brief Wrappers for neural network models usage
+# Wrappers for Neural Network models usage
 #
+# Classes:
 #
-# @section description_models Description
 # KerasGazeModel class to predict, visualize and evaluate gaze direction vector 
 # prediction using a keras model
+#
 # NengoGazeModel class to predict, visualize and evaluate gaze direction vector 
 # prediction using a nengo model
 #
 
 class KerasGazeModel():
     """
-    ! @brief Keras model wrapper class
     Wrapper for Gaze prediction, training and evaluation using a Keras model
     """
 
     def __init__(self, input_shape, output_shape, batch_size):
         """!
-        @brief Initialize class
-
-        @param  input_shape   Model's input shape
-        @param  output_shape  Model's output shape
-        @param  batch_size    Training and Evaluation batch size
+        input_shape  : Model's input shape
+        output_shape : Model's output shape
+        batch_size   : Training and Evaluation batch size
         
         """
         self.input_shape = input_shape
@@ -55,7 +53,7 @@ class KerasGazeModel():
 
     def create_model(self):
         """! 
-        @brief Wrapper constructor for the estimation model
+        Wrapper constructor for the estimation model
         """
         self.gaze_estimation_model = alexNet(self.input_shape, self.output_shape)
         self.gaze_estimation_model.summary()
@@ -63,19 +61,19 @@ class KerasGazeModel():
 
     def compile(self, optimizer='adam', loss='mean_squared_error'):
         """!
-        @brief Wrapper for keras compile function
+        Wrapper for keras compile function
         
-        @param optimizer  Optimizer to be used by the model, default is Adam
-        @param loss       Loss function to be used by the model, default is mean_squared_error
+        optimizer : Optimizer to be used by the model, default is Adam
+        loss      : Loss function to be used by the model, default is mean_squared_error
         """
         self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', AngularDistance()])
 
     def train(self, dataset, n_epochs):
         """!
-        @brief Creates dataset generator and trains the model
+        Creates dataset generator and trains the model
 
-        @param dataset   Tuple containing train image paths, train annotations, eval image_paths and eval annotations
-        @param n_epochs  Number of epochs for training
+        dataset  :  Tuple containing train image paths, train annotations, eval image_paths and eval annotations
+        n_epochs :  Number of epochs for training
         """
 
         # Early stopping
@@ -100,31 +98,30 @@ class KerasGazeModel():
                                         shuffle=True)
         
     def load(self, filename='keras.model'):
-        """! 
-        @brief Wrapper for load_model
+        """ 
+        Wrapper for load_model
 
-        @param filename  Name of the file to load
-
-        @return self.gaze_estimation_model  Keras model
+        filename                   : Name of the file to load
+        self.gaze_estimation_model : Keras model
         """
         self.gaze_estimation_model = keras.models.load_model(filename)
         return self.gaze_estimation_model
     
     def save(self, filename):
         """!
-        @brief Wrapper for save_model
+        Wrapper for save_model
 
-        @param filename  Name of the saved file
+        filename : Name of the saved file
         """
         if (self.gaze_estimation_model):
             self.gaze_estimation_model.save(filename)
         
     def eval(self, dataset, batch_size):
-        """!
-        @brief Model evaluation wrapper and energy estimates
+        """
+        Model evaluation wrapper and energy estimates
 
-        @param dataset     Tuple containing train image paths, train annotations, eval image_paths and eval annotations
-        @param batch_size  Evaluation batch size
+        dataset    : Tuple containing train image paths, train annotations, eval image_paths and eval annotations
+        batch_size : Evaluation batch size
         """
 
         # Create data generator
@@ -149,10 +146,10 @@ class KerasGazeModel():
             print_warnings=False,)
 
     def show_predictions(self, dataset):
-        """!
-        @brief Plot predictions and ground truth with images side by side
+        """
+        Plots predictions and ground truth with images side by side
 
-        @param dataset  Tuple containing train image paths, train annotations, eval image_paths and eval annotations
+        dataset : Tuple containing train image paths, train annotations, eval image_paths and eval annotations
         """
         _, _, eval_image_paths, eval_annotations = dataset
 
@@ -219,12 +216,12 @@ class KerasGazeModel():
 
 
     def predict(self, image):
-        """! 
-        @brief Wrapper for gaze vector infer
+        """
+        Wrapper for gaze vector infer
 
-        @param image  Input image
+        image : Input image
 
-        @return prediction  Normalized predicted gaze vector
+        returns normalized predicted gaze vector
         """
         image = image.reshape(1, self.input_shape[0], self.input_shape[1], 1)
         prediction = self.gaze_estimation_model.predict(image, verbose = 0)
@@ -234,26 +231,21 @@ class KerasGazeModel():
         return prediction
     
     def getModel(self):
-        """! 
-        @brief Get keras model
-
-        @return self.gaze_estimation_model  Keras model
+        """
+        Get and returns keras model
         """
         return self.gaze_estimation_model
 
 class NengoGazeModel():
     """
-    ! @brief Nengo_dl model wrapper class
     Wrapper for Gaze prediction, training and evaluation using a Nengo_dl model
     """
 
     def __init__(self, input_shape, output_shape, batch_size):
         """!
-        @brief Initialize class
-
-        @param  input_shape   Model's input shape
-        @param  output_shape  Model's output shape
-        @param  batch_size    Training and Evaluation batch size
+        input_shape  : Model's input shape
+        output_shape : Model's output shape
+        batch_size   : Training and Evaluation batch size
         
         """
         self.input_shape = input_shape
@@ -262,24 +254,24 @@ class NengoGazeModel():
         self.sim = None
 
     def compile(self, optimizer='adam', loss='mean_squared_error', ):
-        """!
-        @brief Wrapper for nengo_dl compile function
+        """
+        Wrapper for nengo_dl compile function
         
-        @param optimizer  Optimizer to be used by the model, default is Adam
-        @param loss       Loss function to be used by the model, default is mean_squared_error
+        optimizer : Optimizer to be used by the model, default is Adam
+        loss      : Loss function to be used by the model, default is mean_squared_error
         """
         self.sim.compile(loss=loss, optimizer=optimizer, metrics=['accuracy', AngularDistance()])
 
     def convert(self, model, scale_fr=1, synapse=None, inference_only=False):
-        """!
-        @brief Convert keras model in a nengo_dl one
+        """
+        Convert keras model in a nengo_dl one
         
-        @param model           Keras model to be converted
-        @param scale_fr        Scales the inputs of neurons 
-        @param synapse         Synaptic filter to be applied on the output of all neurons
-        @param inference_only  Boolean to save memory in case training is not needed
+        model          : Keras model to be converted
+        scale_fr       : Scales the inputs of neurons 
+        synapse        : Synaptic filter to be applied on the output of all neurons
+        inference_only : Boolean to save memory in case training is not needed
 
-        @return converter  The nengo_dl.Converter object
+        returns the nengo_dl.Converter object
         """       
         converter = nengo_dl.Converter(model, 
                                     scale_firing_rates=scale_fr, 
@@ -290,11 +282,11 @@ class NengoGazeModel():
         return converter
     
     def train(self, dataset, n_epochs):
-        """!
-        @brief Creates dataset generator and trains the model
+        """
+        Creates dataset generator and trains the model
 
-        @param dataset   Tuple containing train image paths, train annotations, eval image_paths and eval annotations
-        @param n_epochs  Number of epochs for training
+        dataset  : Tuple containing train image paths, train annotations, eval image_paths and eval annotations
+        n_epochs : Number of epochs for training
         """
 
         # Early stopping
@@ -321,44 +313,43 @@ class NengoGazeModel():
                         shuffle=True)
 
     def create_simulator(self):
-        """!
-        @brief Creates a nengo_dl simulator 
-        @return self.sim  nengo_dl simulator
+        """
+        Creates and returns a nengo_dl simulator 
         """
         self.sim = nengo_dl.Simulator(self.gaze_estimation_model_net, minibatch_size=self.batch_size)
         return self.sim
     
     def __del__(self):
-        """!
-        @brief Closes the simulator on object destruction
+        """
+        Closes the simulator on object destruction
         """
         if(self.sim):
             self.sim.close()
 
     def load(self, filename):
-        """! 
-        @brief Wrapper for load_params
+        """ 
+        Wrapper for load_params
 
-        @param filename  Name of the file to load
+        filename : Name of the file to load
         """
         self.sim.load_params(filename)
         
     def save(self, filename):
-        """! 
-        @brief Wrapper for save_params
+        """
+        Wrapper for save_params
 
-        @param filename  Name of the file to load
+        filename : Name of the file to load
         """
         self.sim.save_params(filename)
 
     def eval(self, dataset, batch_size):
-        """!
-        @brief Model evaluation wrapper and energy estimates
-
-        @param dataset     Tuple containing train image paths, train annotations, eval image_paths and eval annotations
-        @param batch_size  Evaluation batch size
         """
+        Model evaluation wrapper and energy estimates
 
+        dataset    : Tuple containing train image paths, train annotations, eval image_paths and eval annotations
+        batch_size : Evaluation batch size
+        """
+        
         # Create data generator
         _, _, eval_image_paths, eval_annotations  = dataset
         eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, batch_size, nengo=True)
@@ -368,10 +359,10 @@ class NengoGazeModel():
         print(results)
 
     def show_predictions(self, dataset):
-        """!
-        @brief Plot predictions and ground truth with images side by side
+        """
+        Plot predictions and ground truth with images side by side
 
-        @param dataset  Tuple containing train image paths, train annotations, eval image_paths and eval annotations
+        dataset : Tuple containing train image paths, train annotations, eval image_paths and eval annotations
         """
         _, _, eval_image_paths, eval_annotations = dataset
 
@@ -445,12 +436,12 @@ class NengoGazeModel():
         self.sim.close()
 
     def predict(self, image):
-        """! 
-        @brief Wrapper for gaze vector infer
+        """
+        Wrapper for gaze vector infer
 
-        @param image  Input image
+        image : Input image
 
-        @return prediction  Normalized predicted gaze vector
+        returns the normalized predicted gaze vector
         """
         image = image.reshape(1, 1, self.input_shape[0]* self.input_shape[1])
 
@@ -464,23 +455,19 @@ class NengoGazeModel():
     
     def getModel(self):
         """! 
-        @brief Get Nengo_dl network
-
-        @return self.gaze_estimation_model_net  Nengo_dl network
+        Get and returns the Nengo_dl network
         """
         return self.gaze_estimation_model_net
 
 def alexNet(input_shape, output_shape):
     """
-    ! @brief AlexNet keras model
+    AlexNet keras model
 
     Implementation for the AlexNet model using Keras
 
-    @param input_shape   model's input shape
-    @param output_shape  model's output shape
-
+    input_shape  : model's input shape
+    output_shape : model's output shape
     """
-
     inp = Input(shape=input_shape)
 
     conv1 = Conv2D(96, (11, 11), strides=4, padding='same', activation='relu', bias_initializer='zeros')(inp)
@@ -507,7 +494,6 @@ def alexNet(input_shape, output_shape):
 
 class AngularDistanceSD(tf.keras.metrics.Metric):
     """
-    ! @brief Angular Distance's SD
     Keras metric for Angular Distance's standard deviation for models
     evaluation
     """
@@ -527,7 +513,6 @@ class AngularDistanceSD(tf.keras.metrics.Metric):
 
 class AngularDistance(Mean):
     """
-    ! @brief Angular Distance
     Keras metric for Angular Distance for models evaluation
     """
     def __init__(self, name='AngularDistance', **kwargs):

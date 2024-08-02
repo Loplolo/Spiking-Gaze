@@ -14,31 +14,28 @@ import json
 import scipy.io
 
 ##
-# @file utils.py
+# utils.py
 #
-# @brief Defines data generator and useful methods
+# Data generation from dataset and useful methods used by the main program
 #
-# @section description_utils Description
-# Defines a data generator for the MPIIFaceGaze dataset adapted to
-# both nengo_dl and keras input specifications and applying preprocessing
-# such as gray scale, histogram normalization, image undistortion, cropping and
-# resizing.
 #
 
 class MPIIFaceGazeGenerator(Sequence):
-    """ ! @brief Generator for MPIIFaceGaze dataset"""
+    """ Defines a data generator for the MPIIFaceGaze dataset adapted to
+        both nengo_dl and keras input specifications and applying preprocessing."""
+
     def __init__(self, image_paths, annotations, batch_size, image_size=(224, 224), nengo=False, n_steps=1, shuffle=True):
 
-        """!
-        @brief Generator initialization
+        """
+        Generator initialization
 
-        @param image_paths  Dataset Images paths list
-        @param annotations  Dataset Annotations list
-        @param batch_size   Dimensions of batches
-        @param image_size   (Width, Height) of images 
-        @param nengo        true if its a Nengo_dl model
-        @param n_steps      n_steps for Nengo_dl simulator
-        @param shuffle      true if the data should be shuffled
+        image_paths : Dataset Images paths list
+        annotations : Dataset Annotations list
+        batch_size  : Dimensions of batches
+        image_size  : (Width, Height) of images 
+        nengo       : true if its a Nengo_dl model
+        n_steps     : n_steps for Nengo_dl simulator
+        shuffle     : true if the data should be shuffled
 
         """
         self.image_paths = image_paths
@@ -51,17 +48,16 @@ class MPIIFaceGazeGenerator(Sequence):
         self.on_epoch_end()
 
     def __len__(self):
-        """! @brief Returns the number of batches"""
+        """Returns the number of batches"""
         return int(np.floor(len(self.image_paths) / self.batch_size))
 
     def __getitem__(self, index):
-        """!
-        @brief Gets the next batch
+        """
+        Gets the next batch
 
-        @param index  Current batch index
+        index : Current batch index
 
-        @return images       Single batch of images
-        @return annotations  Single batch of annotations
+        returns single batch of images and annotations in a tuple
         """
         batch_image_paths = self.image_paths[index * self.batch_size:(index + 1) * self.batch_size]
         batch_annotations = self.annotations[index * self.batch_size:(index + 1) * self.batch_size]
@@ -69,7 +65,7 @@ class MPIIFaceGazeGenerator(Sequence):
         return images, annotations
 
     def on_epoch_end(self):
-        """! @brief Shuffles data on epoch end and frees memory"""
+        """Shuffles data on epoch end and frees memory"""
         if self.shuffle:
             indices = np.arange(len(self.image_paths))
             np.random.shuffle(indices)
@@ -79,14 +75,14 @@ class MPIIFaceGazeGenerator(Sequence):
             tf.keras.backend.clear_session()
 
     def _generate_batch(self, batch_image_paths, batch_annotations):
-        """!
-        @brief Generates the next batch applying preprocessing to the images
+        """
+        Generates the next batch applying preprocessing to the images
 
-        @param batch_image_paths  Batch containing image path strings
-        @param batch_annotations  Batch containing annotations 
+        batch_image_paths : Batch containing image path strings
+        batch_annotations : Batch containing annotations 
 
-        @return images             Correctly shaped batch with images
-        @return batch_annotations  Correctly shaped batch with annotations
+        images            : Correctly shaped batch with images
+        batch_annotations : Correctly shaped batch with annotations
 
         """
         images = []
@@ -137,19 +133,16 @@ class MPIIFaceGazeGenerator(Sequence):
 
 
 def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
-    """!
-        @brief Loads dataset informations and extracts annotations
+    """
+        Loads dataset informations and extracts annotations
 
-        @param dataset_dir      Path to dataset directory
-        @param train_split      Percentage of train data to split with eval data
-        @param seed             Shuffle seed to avoid data contaminations
-        @param load_percentage  Percentage of the dataset to load
+        dataset_dir      Path to dataset directory
+        train_split      Percentage of train data to split with eval data
+        seed             Shuffle seed to avoid data contaminations
+        load_percentage  Percentage of the dataset to load
 
-        @return train_image_paths  Path to train images
-        @return train_annotations  Train annotations
-        @return eval_image_paths   Path to evaluation images
-        @return eval_annotations   Evaluation annotations
-
+        Returns the path to train images, train annotations, path to evaluation images
+        and evaluation annotations in a tuple
     """
     image_paths = []
     annotations = []
@@ -197,12 +190,12 @@ def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations
 
 def load_calibration(calibration_file):
-    """! 
-    @brief Loads calibration file
+    """ 
+    Loads calibration file
 
-    @param calibration_file  Path to calibration file
+    calibration_file :  Path to calibration file
 
-    @return calib_data  Dictionary containing the calibration data    
+    returns a dictionary containing the loaded calibration informations
     """
 
     _ , filetype = os.path.splitext(calibration_file)
@@ -214,14 +207,14 @@ def load_calibration(calibration_file):
         return calib_data
 
 def undistort_image(image, camera_matrix, dist_coeffs):
-    """!
-    @brief Fixes distortion in images caused by camera differences
+    """
+    Fixes distortion in images caused by camera differences
 
-    @param image          Input image
-    @param camera_matrix  Camera's intrinsic matrix
-    @param dist_coeffs    Camera's distortion coefficients
+    image         : Input image
+    camera_matrix : Camera's intrinsic matrix
+    dist_coeffs   : Camera's distortion coefficients
     
-    @return undistorted_image  Undistorted image
+    returns the undistorted image
     """
     height, width = image.shape[:2]
     new_camera_matrix, roi  = cv2.getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, (width, height), 1, (width, height))
@@ -232,13 +225,13 @@ def undistort_image(image, camera_matrix, dist_coeffs):
     return undistorted_image
 
 def preprocess_image(image, new_size):
-    """!
-    @brief Image preprocessing
+    """
+    Image preprocessing
 
-    @param image          Input image
-    @param new_size       Input image resize goal
+    image    : Input image
+    new_size : Input image resize goal
     
-    @return image         Processed image
+    returns the processed image
     """
     image = cv2.resize(image, new_size)
     

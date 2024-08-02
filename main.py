@@ -5,18 +5,15 @@ from camera_loop import infer_loop
 from utils import load_data
 
 ##
-# @file main.py
+# main.py
 #
-# @brief Model training and evaluation for artificial and spiking neural networks for Gaze estimation
-#
-# @mainpage Spiking Gaze
-#
-# @section description_main Description
 # Program to train, infer, and evaluate neural network models for 
 # Full Face Deep Appearance-Based Gaze Estimation
+#
+#
 
 def main(args):
-    """! Main program entry"""
+    """Main program entry"""
 
     gpus = tf.config.experimental.list_physical_devices("GPU")
     for gpu in gpus:
