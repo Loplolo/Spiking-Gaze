@@ -14,7 +14,6 @@ import nengo
 
 import keras
 import keras.backend as K
-from keras.callbacks import EarlyStopping
 from keras.metrics import Mean
 
 from keras_spiking import ModelEnergy
@@ -76,8 +75,6 @@ class KerasGazeModel():
         n_epochs :  Number of epochs for training
         """
 
-        # Early stopping
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
         log_dir = "logs/keras_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # Tensorboard callback
@@ -94,7 +91,7 @@ class KerasGazeModel():
                                         validation_data=eval_generator,
                                         verbose=1,
                                         epochs=n_epochs, 
-                                        callbacks=[early_stopping, tensorboard_callback],
+                                        callbacks=[tensorboard_callback], 
                                         shuffle=True)
         
     def load(self, filename='keras.model'):
@@ -294,8 +291,6 @@ class NengoGazeModel():
         n_epochs : Number of epochs for training
         """
 
-        # Early stopping
-        early_stopping = EarlyStopping(monitor='val_probe_loss', patience=10, restore_best_weights=True)
         log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # Tensorboard callback
@@ -314,7 +309,7 @@ class NengoGazeModel():
                         validation_data=eval_generator,
                         verbose=1,
                         epochs=n_epochs, 
-                        callbacks=[early_stopping, tensorboard_callback],
+                        callbacks=[tensorboard_callback],
                         shuffle=True)
 
     def create_simulator(self):
