@@ -66,7 +66,7 @@ class KerasGazeModel():
         optimizer : Optimizer to be used by the model, default is Adam
         loss      : Loss function to be used by the model, default is mean_squared_error
         """
-        self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', AngularDistance()])
+        self.gaze_estimation_model.compile(optimizer=optimizer, loss=loss, metrics=['mae', 'mse', R2Score(), AngularDistance()])
 
     def train(self, dataset, n_epochs):
         """!
@@ -139,8 +139,10 @@ class KerasGazeModel():
                 "name",
                 "rate",
                 "synop_energy cpu",
+                "synop_energy gpu",
                 "synop_energy loihi",
                 "neuron_energy cpu",
+                "synop_energy gpu",
                 "neuron_energy loihi",
             ),
             print_warnings=False,)
@@ -260,7 +262,7 @@ class NengoGazeModel():
         optimizer : Optimizer to be used by the model, default is Adam
         loss      : Loss function to be used by the model, default is mean_squared_error
         """
-        self.sim.compile(loss=loss, optimizer=optimizer, metrics=['accuracy', AngularDistance()])
+        self.sim.compile(loss=loss, optimizer=optimizer, metrics=['mae', 'mse', R2Score(), AngularDistance()])
 
     def convert(self, model, scale_fr=1, synapse=None, inference_only=False):
         """
@@ -277,6 +279,9 @@ class NengoGazeModel():
                                     scale_firing_rates=scale_fr, 
                                     synapse=synapse,
                                     inference_only = inference_only,
+                                    max_to_avg_pool=max_to_avg_pool,                        
+                                    swap_activations=swap_activations,
+                                    allow_fallback=True
                                     )
         self.gaze_estimation_model_net = converter.net
         return converter
@@ -494,35 +499,91 @@ def alexNet(input_shape, output_shape):
 
 class AngularDistanceSD(tf.keras.metrics.Metric):
     """
-    Keras metric for Angular Distance's standard deviation for models
-    evaluation
+    Keras metric to compute the standard deviation of the angular distances
     """
-    def __init__(self, name='AngularDistanceSD', **kwargs):
+    def __init__(self, name='angular_distance_sd', **kwargs):
         super(AngularDistanceSD, self).__init__(name=name, **kwargs)
-        self.angles = self.add_weight(name='angles', initializer='zeros')
+        self.sum_angles = self.add_weight(name='sum_angles', initializer='zeros')
+        self.sum_squared_angles = self.add_weight(name='sum_squared_angles', initializer='zeros')
+        self.count = self.add_weight(name='count', initializer='zeros')
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         y_true_norm = K.l2_normalize(y_true, axis=-1)
         y_pred_norm = K.l2_normalize(y_pred, axis=-1)
         cosine_similarity = K.sum(y_true_norm * y_pred_norm, axis=-1)
-        value = tf.math.acos(cosine_similarity)
-        self.angles.assign_add(value)
+        
+        cosine_similarity = tf.clip_by_value(cosine_similarity, -1.0, 1.0)
+        
+        angles = tf.math.acos(cosine_similarity)
+        
+        self.sum_angles.assign_add(K.sum(angles))
+        self.sum_squared_angles.assign_add(K.sum(K.square(angles)))
+        
+        if sample_weight is not None:
+            self.count.assign_add(K.sum(sample_weight))
+        else:
+            self.count.assign_add(K.cast(K.shape(y_true)[0], tf.float32))
 
     def result(self):
-        return np.std(self.angles)
+        mean_angle = self.sum_angles / self.count
+        mean_square_angle = self.sum_squared_angles / self.count
+        variance_angle = mean_square_angle - K.square(mean_angle)
+        
+        variance_angle = K.maximum(variance_angle, 0.0)
+        
+        return K.sqrt(variance_angle)
+
+    def reset_states(self):
+        K.batch_set_value([(v, K.zeros_like(v)) for v in self.variables])
 
 class AngularDistance(Mean):
     """
-    Keras metric for Angular Distance for models evaluation
+    Keras metric for Angular Distance (from Cosine Similarity)
     """
-    def __init__(self, name='AngularDistance', **kwargs):
+    def __init__(self, name='angular_distance', **kwargs):
         super(AngularDistance, self).__init__(name=name, **kwargs)
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         y_true_norm = K.l2_normalize(y_true, axis=-1)
         y_pred_norm = K.l2_normalize(y_pred, axis=-1)
         cosine_similarity = K.sum(y_true_norm * y_pred_norm, axis=-1)
-        value = tf.math.acos(cosine_similarity)
-        super().update_state(value, sample_weight)
+        
+        cosine_similarity = tf.clip_by_value(cosine_similarity, -1.0, 1.0)
 
+        angular_distance = tf.math.acos(cosine_similarity)
+        
+        return super(AngularDistance, self).update_state(angular_distance, sample_weight)
 
+class R2Score(tf.keras.metrics.Metric):
+    """
+    Keras metric for the coefficient of determination, R2 Score
+    """
+    def __init__(self, name='r2_score', **kwargs):
+        super(R2Score, self).__init__(name=name, **kwargs)
+        self.ss_res = self.add_weight(name='ss_res', initializer='zeros')
+        self.ss_tot = self.add_weight(name='ss_tot', initializer='zeros')
+        self.count = self.add_weight(name='count', initializer='zeros')
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        residuals = y_true - y_pred
+        ss_res = K.sum(K.square(residuals))
+        self.ss_res.assign_add(ss_res)
+
+        y_true_mean = K.mean(y_true)
+        total = y_true - y_true_mean
+        ss_tot = K.sum(K.square(total))
+        self.ss_tot.assign_add(ss_tot)
+
+        if sample_weight is not None:
+            self.count.assign_add(K.sum(sample_weight))
+        else:
+            self.count.assign_add(K.cast(K.shape(y_true)[0], tf.float32))
+
+    def result(self):
+        ss_res = self.ss_res / self.count
+        ss_tot = self.ss_tot / (self.count - 1)
+        r2_score = K.constant(1, dtype=tf.float32) - ss_res / ss_tot
+        return r2_score
+
+    def reset_states(self):
+        K.batch_set_value([(v, K.zeros_like(v)) for v in self.variables])

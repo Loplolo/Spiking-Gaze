@@ -25,12 +25,18 @@ def main(args):
     gazeModel = None
 
     if args.type in ['keras', 'nengo', 'converted']:
-        kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
+        kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size, model_name=args.model)
         kerasModel.create_model()
 
-    if args.type in ['nengo', 'converted']:
-        gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size)
-        gazeModel.convert(kerasModel.getModel(), inference_only=args.type == 'converted')
+    if args.type == 'nengo' or args.type == 'converted':
+        gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size, model_name=args.model)
+
+        if (args.type == 'converted' and args.load):
+            kerasModel.load(args.load)
+            gazeModel.convert(kerasModel.getModel(), synapse=0.01, scale_fr=20, inference_only=True, swap_activations={tf.keras.activations.relu: nengo.SpikingRectifiedLinear()})
+        else:
+            gazeModel.convert(kerasModel.getModel(), inference_only=False, synapse=0.01, scale_fr=20, swap_activations={tf.keras.activations.relu: nengo.SpikingRectifiedLinear()})
+
 
     if args.type == 'keras':
         gazeModel = kerasModel
