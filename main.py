@@ -1,9 +1,11 @@
 import argparse
 import tensorflow as tf
-from models import KerasGazeModel, NengoGazeModel
+from models import NengoGazeModel
 from camera_loop import infer_loop
 from utils import load_data
 
+from nengo import SpikingRectifiedLinear
+import keras
 ##
 # main.py
 #
@@ -12,70 +14,80 @@ from utils import load_data
 #
 #
 
+# Get repetible results
+import tensorflow as tf
+tf.random.set_seed(879372)
+
+# Set memory growth on GPU
+gpus = tf.config.experimental.list_physical_devices("GPU")
+for gpu in gpus:
+    tf.config.experimental.set_memory_growth(gpu, True)
+  
 def main(args):
     """Main program entry"""
 
-    gpus = tf.config.experimental.list_physical_devices("GPU")
-    for gpu in gpus:
-        tf.config.experimental.set_memory_growth(gpu, True)
-   
     IMAGE_SIZE = (224, 224, 1) # Half size for less memory usage
+
+    dataset = load_data(args.dataset_dir, args.train_split, args.eval_split, seed=879372)
+    train_dataset, test_dataset = dataset[:4], dataset[4:]
+
+    if (args.action == "train"):
+        args.n_steps = 1   # we present the images only once since it's a non-spiking network being trained
+
+    gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size, n_steps=args.n_steps)
+    gazeModel.create_model()
+
+    if (args.type == 'snn' and args.action == "train") or (args.type == "ann"):
+        gazeModel.convert(gazeModel.model, scale_fr=args.sfr)
+    else:
+        gazeModel.convert(gazeModel.model,
+                            synapse=args.synapse, 
+                            scale_fr=args.sfr, 
+                            swap_activations={tf.keras.activations.relu: SpikingRectifiedLinear()})
     
-    dataset = load_data(args.dataset_dir, args.train_split, seed=42)
-    gazeModel = None
-
-    if args.type in ['keras', 'nengo', 'converted']:
-        kerasModel = KerasGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size, model_name=args.model)
-        kerasModel.create_model()
-
-    if args.type == 'nengo' or args.type == 'converted':
-        gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size, model_name=args.model)
-
-        if (args.type == 'converted' and args.load):
-            kerasModel.load(args.load)
-            gazeModel.convert(kerasModel.getModel(), synapse=0.01, scale_fr=20, inference_only=True, swap_activations={tf.keras.activations.relu: nengo.SpikingRectifiedLinear()})
-        else:
-            gazeModel.convert(kerasModel.getModel(), inference_only=False, synapse=0.01, scale_fr=20, swap_activations={tf.keras.activations.relu: nengo.SpikingRectifiedLinear()})
-
-
-    if args.type == 'keras':
-        gazeModel = kerasModel
-
-    if gazeModel and (args.action == "show" or args.action == "webcam"):
+    if (args.action == "show" or args.action == "webcam"):
         gazeModel.batch_size = 1
-
-    if args.type in ['nengo', 'converted']:
-        gazeModel.create_simulator()
-
-    gazeModel.compile()
-
-    if (args.load and not args.type == 'converted'):
+    gazeModel.create_simulator()
+        
+    if(args.load):
         gazeModel.load(args.load)
+
+    gazeModel.compile(keras.optimizers.Adam(learning_rate=args.lr))
     
     if args.action == 'train':
-        gazeModel.train(dataset, n_epochs=args.epochs)
+        gazeModel.train(train_dataset, n_epochs=args.epochs)
         if args.save:
             gazeModel.save(args.save)
 
     elif args.action == 'eval':
-        gazeModel.eval(dataset, args.batch_size)
+        gazeModel.energyEstimates(test_dataset)
+        gazeModel.eval(test_dataset)
 
     elif args.action == 'show':
-        gazeModel.show_predictions(dataset)
+        gazeModel.show_predictions(test_dataset)
 
     elif args.action == 'webcam':
         infer_loop(gazeModel, IMAGE_SIZE, calib_path=args.calib_path)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train a Nengo_dl or Keras model on the MPIIFaceGaze dataset.')
-    parser.add_argument('type', choices=['nengo', 'keras', 'converted'], help='Type of model to use')
+    parser = argparse.ArgumentParser(description='Train a Nengo_dl model on the MPIIFaceGaze dataset.')
+    parser.add_argument('type', choices=['ann', 'snn'], help='Type of model to use')
     parser.add_argument('action', choices=['train', 'eval', 'webcam', 'show'], help='Action to perform')
-    
+
     parser.add_argument('--dataset_dir', type=str, default="./dataset/MPIIFaceGaze", help='Path to the dataset directory')
     parser.add_argument('--calib_path', type=str, default="./dataset/custom/p00/Calibration/Camera.mat", help='Path to calibration file for webcam infer')
+
     parser.add_argument('--train_split', type=float, default=0.8, help='Proportion of data to use for training')
+    parser.add_argument('--eval_split', type=float, default=0.1, help='Proportion of data to use for evaluation')
+
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs to train')
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+
+    parser.add_argument('--n_steps', type=int, default=100, help='Nengo_dl number of steps for each image')
+    parser.add_argument('--synapse', type=float, default=0.001, help='Nengo_dl synapse filter')
+    parser.add_argument('--sfr', type=int, default=100, help='Nengo_dl scale firing rate')
+
     parser.add_argument('--save', type=str, help='Path to save the model')
     parser.add_argument('--load', type=str, help='Path to load a pre-trained model')
 

@@ -2,15 +2,13 @@ import os
 import numpy as np
 import pandas as pd
 import cv2
-from keras.utils import Sequence
-import matplotlib.pyplot as plt
 import tensorflow as tf
+from keras.utils import Sequence
 import gc
 import os
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
-import json 
 import scipy.io
 
 ##
@@ -22,19 +20,18 @@ import scipy.io
 
 class MPIIFaceGazeGenerator(Sequence):
     """ Defines a data generator for the MPIIFaceGaze dataset adapted to
-        both nengo_dl and keras input specifications and applying preprocessing."""
+        nengo_dl input specifications and applying preprocessing."""
 
-    def __init__(self, image_paths, annotations, batch_size, image_size=(224, 224), nengo=False, n_steps=1, shuffle=True):
+    def __init__(self, image_paths, annotations, batch_size, image_size=(224, 224), n_steps=1, shuffle=True):
 
         """
         Generator initialization
 
         image_paths : Dataset Images paths list
         annotations : Dataset Annotations list
-        batch_size  : Dimensions of batches
+        batch_size  : Dimension of batches
         image_size  : (Width, Height) of images 
-        nengo       : true if its a Nengo_dl model
-        n_steps     : n_steps for Nengo_dl simulator
+        n_steps     : n_steps for Nengo_dl simulator (SNN only)
         shuffle     : true if the data should be shuffled
 
         """
@@ -43,7 +40,6 @@ class MPIIFaceGazeGenerator(Sequence):
         self.batch_size = batch_size
         self.image_size = image_size
         self.shuffle = shuffle
-        self.nengo = nengo
         self.n_steps = n_steps
         self.on_epoch_end()
 
@@ -61,9 +57,8 @@ class MPIIFaceGazeGenerator(Sequence):
         """
         batch_image_paths = self.image_paths[index * self.batch_size:(index + 1) * self.batch_size]
         batch_annotations = self.annotations[index * self.batch_size:(index + 1) * self.batch_size]
-        images, annotations = self._generate_batch(batch_image_paths, batch_annotations)
-        return images, annotations
-
+        return self._generate_batch(batch_image_paths, batch_annotations)
+         
     def on_epoch_end(self):
         """Shuffles data on epoch end and frees memory"""
         if self.shuffle:
@@ -73,7 +68,8 @@ class MPIIFaceGazeGenerator(Sequence):
             self.annotations = self.annotations[indices]
             gc.collect()
             tf.keras.backend.clear_session()
-
+            tf.compat.v1.reset_default_graph()
+            
     def _generate_batch(self, batch_image_paths, batch_annotations):
         """
         Generates the next batch applying preprocessing to the images
@@ -86,6 +82,7 @@ class MPIIFaceGazeGenerator(Sequence):
 
         """
         images = []
+
         for image_path in batch_image_paths:
             image = cv2.imread(image_path)
 
@@ -104,45 +101,37 @@ class MPIIFaceGazeGenerator(Sequence):
             
         images = np.array(images)
 
-        # Reshaping to match input
-        images.reshape(self.batch_size, images.shape[1], images.shape[2], 1)
-        batch_annotations = np.array(batch_annotations)
+        # Reshape images for NengoDL 
+        images = images.reshape((self.batch_size, 1, -1))
+        images = np.tile(images, (1, self.n_steps, 1))
 
-        if self.nengo:
-            # Reshape images and annotations for NengoDL 
-            images = images.reshape((self.batch_size, 1, -1)) 
-            batch_annotations = batch_annotations.reshape((self.batch_size, 1, -1)) 
+        # Reshape annotations for NengoDL
+        batch_annotations = np.array(batch_annotations) 
+        batch_annotations = batch_annotations.reshape((self.batch_size, 1, -1)) 
+        batch_annotations = np.tile(batch_annotations, (1, self.n_steps, 1))
 
-            # Tiling images for each step
-            images = np.tile(images, (1, self.n_steps, 1))
-            batch_annotations = np.tile(batch_annotations, (1, self.n_steps, 1))
+        return {"n_steps": np.ones((self.batch_size, 1), dtype=np.int32), 
+                "input_1":images,
+                "conv2d.0.bias":np.ones((self.batch_size, 96, 1), dtype=np.int32),
+                "conv2d_1.0.bias":np.ones((self.batch_size, 256, 1), dtype=np.int32),
+                "conv2d_2.0.bias":np.ones((self.batch_size, 384, 1), dtype=np.int32),
+                "conv2d_3.0.bias":np.ones((self.batch_size, 384, 1), dtype=np.int32),
+                "conv2d_4.0.bias":np.ones((self.batch_size, 256, 1), dtype=np.int32),
+                "dense_2.0.bias":np.ones((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
+                }, {'probe': batch_annotations}
 
-            if self.nengo:
-
-                return {"input_1":images,
-                        "n_steps":np.ones((self.batch_size, self.n_steps), dtype=np.int32), 
-                        "conv2d.0.bias":np.zeros((self.batch_size, 96, 1), dtype=np.int32),
-                        "conv2d_1.0.bias":np.zeros((self.batch_size, 256, 1), dtype=np.int32),
-                        "conv2d_2.0.bias":np.zeros((self.batch_size, 384, 1), dtype=np.int32),
-                        "conv2d_3.0.bias":np.zeros((self.batch_size, 384, 1), dtype=np.int32),
-                        "conv2d_4.0.bias":np.zeros((self.batch_size, 256, 1), dtype=np.int32),
-                        "dense_2.0.bias":np.zeros((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
-                        }, {'probe': batch_annotations}
-                
-        return images, batch_annotations
-
-
-def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
+def load_data(dataset_dir, train_split, eval_split, seed=42, load_percentage=1.0):
     """
-        Loads dataset informations and extracts annotations
+    Loads dataset information and extracts annotations
 
-        dataset_dir      Path to dataset directory
-        train_split      Percentage of train data to split with eval data
-        seed             Shuffle seed to avoid data contaminations
-        load_percentage  Percentage of the dataset to load
+    dataset_dir      Path to dataset directory
+    train_split      Percentage of train data out of the total data
+    eval_split       Percentage of evaluation data out of the remaining data after train split
+    seed             Shuffle seed to avoid data contamination
+    load_percentage  Percentage of the dataset to load
 
-        Returns the path to train images, train annotations, path to evaluation images
-        and evaluation annotations in a tuple
+    Returns the path to train images, train annotations, path to evaluation images,
+    evaluation annotations, path to test images, and test annotations in a tuple
     """
     image_paths = []
     annotations = []
@@ -158,7 +147,7 @@ def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
     num_samples_to_load = int(total_samples * load_percentage)
     image_paths = image_paths[:num_samples_to_load]
 
-    # Open .txt annotation files and extract gaze vector informations
+    # Open .txt annotation files and extract gaze vector information
     for root, _, files in os.walk(dataset_dir):
         for file in files:
             if file.endswith('.txt'):
@@ -166,7 +155,7 @@ def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
 
                 # ( 21, 22, 23 ) = Face center = fc
                 # ( 24, 25, 26 ) = Gaze Target = gt
-                # Gaze direction = gt - fc in CAMERA COORDINATES
+                # Gaze direction = gt - fc in Camera Coordinates
 
                 fc = df.iloc[:, 21:24].values
                 gt = df.iloc[:, 24:27].values
@@ -175,19 +164,26 @@ def load_data(dataset_dir, train_split, seed=42, load_percentage=1.0):
                 annotations.extend(annotation)
 
     annotations = np.array(annotations)
-    
-    # Load only the wanted percentage of data
+
+    # Load only the desired percentage of data
     annotations = annotations[:num_samples_to_load]
     image_paths, annotations = shuffle(image_paths, annotations, random_state=seed)
 
-    # Compute train/eval split
-    split_index = int(train_split * num_samples_to_load)
-    train_image_paths = image_paths[:split_index]
-    train_annotations = annotations[:split_index]
-    eval_image_paths = image_paths[split_index:]
-    eval_annotations = annotations[split_index:]
+    # Compute the split indices for train, eval, and test
+    train_index = int(train_split * num_samples_to_load)
+    eval_index = train_index + int(eval_split * (num_samples_to_load - train_index))
 
-    return train_image_paths, train_annotations, eval_image_paths, eval_annotations
+    # Split data into train, eval, and test sets
+    train_image_paths = image_paths[:train_index]
+    train_annotations = annotations[:train_index]
+    
+    eval_image_paths = image_paths[train_index:eval_index]
+    eval_annotations = annotations[train_index:eval_index]
+    
+    test_image_paths = image_paths[eval_index:]
+    test_annotations = annotations[eval_index:]
+
+    return train_image_paths, train_annotations, eval_image_paths, eval_annotations, test_image_paths, test_annotations
 
 def load_calibration(calibration_file):
     """ 
