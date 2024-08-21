@@ -80,8 +80,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_dir', type=str, default="./dataset/MPIIFaceGaze", help='Path to the dataset directory')
     parser.add_argument('--calib_path', type=str, default="./dataset/custom/p00/Calibration/Camera.mat", help='Path to calibration file for webcam infer')
 
-    parser.add_argument('--train_split', type=float, default=0.8, help='Proportion of data to use for training')
-    parser.add_argument('--eval_split', type=float, default=0.1, help='Proportion of data to use for evaluation')
+    parser.add_argument('--train_split', type=float, default=0.8, help='Proportion of training+eval data to use for training')
+    parser.add_argument('--test_split', type=float, default=0.2, help='Proportion of total data to use for testing')
 
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs to train')

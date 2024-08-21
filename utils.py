@@ -120,15 +120,15 @@ class MPIIFaceGazeGenerator(Sequence):
                 "dense_2.0.bias":np.ones((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
                 }, {'probe': batch_annotations}
 
-def load_data(dataset_dir, train_split, eval_split, seed=42, load_percentage=1.0):
+def load_data(dataset_dir, test_split, train_split, seed=879372, load_percentage=1.0):
     """
     Loads dataset information and extracts annotations
 
-    dataset_dir      Path to dataset directory
-    train_split      Percentage of train data out of the total data
-    eval_split       Percentage of evaluation data out of the remaining data after train split
-    seed             Shuffle seed to avoid data contamination
-    load_percentage  Percentage of the dataset to load
+    dataset_dir     : Path to dataset directory
+    train_split     : Percentage of train data out of the train+evaluation data
+    test_split      : Percentage of total data to use for testing
+    seed            : Shuffle seed to avoid data contamination
+    load_percentage : Percentage of the dataset to load
 
     Returns the path to train images, train annotations, path to evaluation images,
     evaluation annotations, path to test images, and test annotations in a tuple
@@ -169,19 +169,21 @@ def load_data(dataset_dir, train_split, eval_split, seed=42, load_percentage=1.0
     annotations = annotations[:num_samples_to_load]
     image_paths, annotations = shuffle(image_paths, annotations, random_state=seed)
 
-    # Compute the split indices for train, eval, and test
-    train_index = int(train_split * num_samples_to_load)
-    eval_index = train_index + int(eval_split * (num_samples_to_load - train_index))
+    # Train+eval / test split
+    test_index = int((1 - test_split) * num_samples_to_load)
+    train_and_eval_image_paths = image_paths[:test_index]
+    train_and_eval_annotations = annotations[:test_index]
+    test_image_paths = image_paths[test_index:]
+    test_annotations = annotations[test_index:]
 
-    # Split data into train, eval, and test sets
-    train_image_paths = image_paths[:train_index]
-    train_annotations = annotations[:train_index]
-    
-    eval_image_paths = image_paths[train_index:eval_index]
-    eval_annotations = annotations[train_index:eval_index]
-    
-    test_image_paths = image_paths[eval_index:]
-    test_annotations = annotations[eval_index:]
+    # Train/eval split
+    train_index = int(train_split * len(train_and_eval_image_paths))
+
+    train_image_paths = train_and_eval_image_paths[:train_index]
+    train_annotations = train_and_eval_annotations[:train_index]
+
+    eval_image_paths = train_and_eval_image_paths[train_index:]
+    eval_annotations = train_and_eval_annotations[train_index:]
 
     return train_image_paths, train_annotations, eval_image_paths, eval_annotations, test_image_paths, test_annotations
 
