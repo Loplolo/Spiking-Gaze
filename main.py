@@ -58,13 +58,13 @@ def main(args):
     gazeModel.compile(keras.optimizers.Adam(learning_rate=args.lr))
     
     if args.action == 'train':
-        gazeModel.train(train_dataset, n_epochs=args.epochs)
+        gazeModel.train(train_dataset, n_epochs=args.epochs, patience=args.patience)
         if args.save:
             gazeModel.save(args.save)
 
     elif args.action == 'test':
         gazeModel.energyEstimates(test_dataset)
-        gazeModel.eval(test_dataset)
+        gazeModel.eval(test_dataset, sfr=args.sfr)
 
     elif args.action == 'show':
         gazeModel.show_predictions(test_dataset)
@@ -84,11 +84,13 @@ if __name__ == '__main__':
     parser.add_argument('--test_split', type=float, default=0.2, help='Proportion of total data to use for testing')
 
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
-    parser.add_argument('--epochs', type=int, default=10, help='Number of epochs to train')
+    parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train')
+    parser.add_argument('--patience', type=int, default=5, help='Number of epochs with no change before early stopping')
+
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
     parser.add_argument('--n_steps', type=int, default=100, help='Nengo_dl number of steps for each image')
-    parser.add_argument('--synapse', type=float, default=0.001, help='Nengo_dl synapse filter')
+    parser.add_argument('--synapse', type=float, default=0.01, help='Nengo_dl synapse filter')
     parser.add_argument('--sfr', type=int, default=100, help='Nengo_dl scale firing rate')
 
     parser.add_argument('--save', type=str, help='Path to save the model')
