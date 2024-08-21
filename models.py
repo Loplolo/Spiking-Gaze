@@ -1,4 +1,5 @@
 import numpy as np
+
 import matplotlib.pyplot as plt
 import datetime
 import cv2
@@ -296,6 +297,7 @@ class NengoGazeModel():
         plt.tight_layout()
         plt.show()
 
+
     def predict(self, image):
         """
         Wrapper for gaze vector infer
@@ -317,7 +319,7 @@ class NengoGazeModel():
     
 def alexNet(input_shape, output_shape):
     """
-    AlexNet keras model
+    Keras model for 3D gaze estimation
 
     Implementation for the AlexNet model using Keras
 

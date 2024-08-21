@@ -14,7 +14,7 @@ import keras
 #
 #
 
-# Get repetible results
+# Get repeatable results
 import tensorflow as tf
 tf.random.set_seed(879372)
 
@@ -28,7 +28,7 @@ def main(args):
 
     IMAGE_SIZE = (224, 224, 1) # Half size for less memory usage
 
-    dataset = load_data(args.dataset_dir, args.train_split, args.eval_split, seed=879372)
+    dataset = load_data(args.dataset_dir, args.test_split, args.train_split, seed=879372)
     train_dataset, test_dataset = dataset[:4], dataset[4:]
 
     if (args.action == "train"):
@@ -59,7 +59,7 @@ def main(args):
         if args.save:
             gazeModel.save(args.save)
 
-    elif args.action == 'eval':
+    elif args.action == 'test':
         gazeModel.energyEstimates(test_dataset)
         gazeModel.eval(test_dataset)
 
@@ -72,7 +72,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a Nengo_dl model on the MPIIFaceGaze dataset.')
     parser.add_argument('type', choices=['ann', 'snn'], help='Type of model to use')
-    parser.add_argument('action', choices=['train', 'eval', 'webcam', 'show'], help='Action to perform')
+    parser.add_argument('action', choices=['train', 'test', 'webcam', 'show'], help='Action to perform')
 
     parser.add_argument('--dataset_dir', type=str, default="./dataset/MPIIFaceGaze", help='Path to the dataset directory')
     parser.add_argument('--calib_path', type=str, default="./dataset/custom/p00/Calibration/Camera.mat", help='Path to calibration file for webcam infer')
