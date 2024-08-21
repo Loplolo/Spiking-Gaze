@@ -1,11 +1,13 @@
 import argparse
 import tensorflow as tf
+import numpy as np
 from models import NengoGazeModel
 from camera_loop import infer_loop
 from utils import load_data
 
 from nengo import SpikingRectifiedLinear
 import keras
+
 ##
 # main.py
 #
@@ -17,6 +19,7 @@ import keras
 # Get repeatable results
 import tensorflow as tf
 tf.random.set_seed(879372)
+np.random.seed(879372) 
 
 # Set memory growth on GPU
 gpus = tf.config.experimental.list_physical_devices("GPU")
