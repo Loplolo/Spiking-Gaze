@@ -11,11 +11,9 @@ import os
 import re
 import tkinter as tk
 import numpy as np
-import json
 import argparse
 import sys
 from utils import load_calibration
-import colorsys
 import dlib
 
 class GazeRecorder:
@@ -130,7 +128,6 @@ class FaceProcessor:
             # Adjust gaze point coordinates to be relative to the center of the screen
             sx = (self.screenSize["width_mm"] / self.screenSize["width_pixel"])[0][0]
             sy = (self.screenSize["height_mm"] / self.screenSize["height_pixel"])[0][0]
-
 
             # Pixel to mm conversion
             scaling_matrix = np.array([[sx, 0, 0],[0, sy, 0], [0, 0,  1]])

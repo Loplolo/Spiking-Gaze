@@ -18,8 +18,8 @@ import keras
 
 # Get repeatable results
 import tensorflow as tf
-tf.random.set_seed(879372)
-np.random.seed(879372) 
+tf.random.set_seed(0)
+np.random.seed(0) 
 
 # Set memory growth on GPU
 gpus = tf.config.experimental.list_physical_devices("GPU")

@@ -120,7 +120,7 @@ class MPIIFaceGazeGenerator(Sequence):
                 "dense_2.0.bias":np.ones((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
                 }, {'probe': batch_annotations}
 
-def load_data(dataset_dir, test_split, train_split, seed=879372, load_percentage=1.0):
+def load_data(dataset_dir, test_split, train_split, seed=0, load_percentage=1.0):
     """
     Loads dataset information and extracts annotations
 
