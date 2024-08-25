@@ -184,19 +184,27 @@ class FaceProcessor:
 
                         # Detect facial landmarks
                         shape = self.predictor(gray, face_rect)
-                        landmarks = [(shape.part(i).x, shape.part(i).y) for i in range(68)]
 
+                        six_landmarks = [
+                            (shape.part(36).x, shape.part(36).y),  # Left eye outer corner
+                            (shape.part(39).x, shape.part(39).y),  # Left eye inner corner
+                            (shape.part(42).x, shape.part(42).y),  # Right eye outer corner
+                            (shape.part(45).x, shape.part(45).y),  # Right eye inner corner
+                            (shape.part(48).x, shape.part(48).y),  # Mouth left corner
+                            (shape.part(54).x, shape.part(54).y)   # Mouth right corner
+                        ]
+
+                        left_eye = ((six_landmarks[0][0] + six_landmarks[1][0]) / 2, (six_landmarks[0][1] + six_landmarks[1][1]) / 2)
+                        right_eye = ((six_landmarks[2][0] + six_landmarks[3][0]) / 2, (six_landmarks[2][1] + six_landmarks[3][1]) / 2)
+                        
                         # Approximate pixel -> mm conversion using average eyes distance
-                        left_eye = ((shape.part(36).x + shape.part(39).x) / 2, (shape.part(36).y + shape.part(39).y) / 2)
-                        right_eye = ((shape.part(42).x + shape.part(45).x) / 2, (shape.part(42).y + shape.part(45).y) / 2)
-
                         eye_distance_pixels = ((right_eye[0] - left_eye[0])**2 + (right_eye[1] - left_eye[1])**2)**0.5 
                         average_eye_distance_mm = 63
                         pixels_to_mm = average_eye_distance_mm / eye_distance_pixels
 
                         # Face center
-                        center_x_pixels = sum([pt[0] for pt in landmarks]) / len(landmarks)
-                        center_y_pixels = sum([pt[1] for pt in landmarks]) / len(landmarks)
+                        center_x_pixels = sum([pt[0] for pt in six_landmarks]) / len(six_landmarks)
+                        center_y_pixels = sum([pt[1] for pt in six_landmarks]) / len(six_landmarks)
 
                         # Calculate face center distance from the camera center
                         camera_center_pixels = (cam_width_px / 2, cam_width_px / 2)
@@ -218,9 +226,23 @@ class FaceProcessor:
                         # Save relative filename in the annotations file
                         relative_filename = os.path.relpath(filename, start=os.path.join(filename, '..', '..'))
 
+                        # concatenate landmarks coordinates and format for writing
+
+                        flattened_points = [str(coord) for pt in six_landmarks for coord in pt]
+                        points_string = ' '.join(flattened_points)
+
                         with open(os.path.join(self.path, 'annotations.txt'), 'a') as file:
-                            file.write(f"{relative_filename}" + " 0" * 20 + f" {face_center_x} {face_center_y} {distance} {camera_gaze_point[0][0]} {camera_gaze_point[1][0]} {camera_gaze_point[2][0]}\n")
-                            print(f"Face center at ({face_center_x}, {face_center_y}, {distance}), Gaze target at ({camera_gaze_point[0][0]}, {camera_gaze_point[1][0]}, {camera_gaze_point[2][0]})")
+                            file.write(f"{relative_filename} " +           # Relative path
+                                    f"{gaze_point[0]} {gaze_point[1]} " +  # Screen Coordinate 2D 
+                                    points_string +                        # Flattened corner points
+                                    "0 " * 6 +                             # No 3D model informations
+                                    f"{face_center_x} {face_center_y} " +  # Face center coordinates
+                                    f"{distance} " +                       # Distance
+                                    f"{camera_gaze_point[0][0]} " +        # Camera gaze point X
+                                    f"{camera_gaze_point[1][0]} " +        # Camera gaze point Y
+                                    f"{camera_gaze_point[2][0]}\n")        # Camera gaze point Z
+                            
+                        print(f"Face center at ({face_center_x}, {face_center_y}, {distance}), Gaze target at ({camera_gaze_point[0][0]}, {camera_gaze_point[1][0]}, {camera_gaze_point[2][0]})")
 
                         face_detected = True 
                         break  # Break out of the for loop once a face is saved
