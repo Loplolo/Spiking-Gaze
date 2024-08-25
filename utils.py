@@ -22,22 +22,24 @@ class MPIIFaceGazeGenerator(Sequence):
     """ Defines a data generator for the MPIIFaceGaze dataset adapted to
         nengo_dl input specifications and applying preprocessing."""
 
-    def __init__(self, image_paths, annotations, batch_size, image_size=(224, 224), n_steps=1, shuffle=True):
+    def __init__(self, image_paths, gaze_vectors, landmarks, batch_size, image_size=(224, 224), n_steps=1, shuffle=True):
 
         """
         Generator initialization
 
-        image_paths : Dataset Images paths list
-        annotations : Dataset Annotations list
-        batch_size  : Dimension of batches
-        image_size  : (Width, Height) of images 
-        n_steps     : n_steps for Nengo_dl simulator (SNN only)
-        shuffle     : true if the data should be shuffled
+        image_paths  : Dataset Images paths list
+        gaze_vectors : Dataset gaze vectors list
+        gaze_vectors : Dataset 6 landmarks list
+        batch_size   : Dimension of batches
+        image_size   : (Width, Height) of images 
+        n_steps      : n_steps for Nengo_dl simulator (SNN only)
+        shuffle      : true if the data should be shuffled
 
         """
         self.image_paths = image_paths
-        self.annotations = annotations
+        self.gaze_vectors = gaze_vectors
         self.batch_size = batch_size
+        self.landmarks = landmarks
         self.image_size = image_size
         self.shuffle = shuffle
         self.n_steps = n_steps
@@ -53,11 +55,13 @@ class MPIIFaceGazeGenerator(Sequence):
 
         index : Current batch index
 
-        returns single batch of images and annotations in a tuple
+        returns single batch of images and gaze_vectors in a tuple
         """
         batch_image_paths = self.image_paths[index * self.batch_size:(index + 1) * self.batch_size]
-        batch_annotations = self.annotations[index * self.batch_size:(index + 1) * self.batch_size]
-        return self._generate_batch(batch_image_paths, batch_annotations)
+        batch_gaze_vectors = self.gaze_vectors[index * self.batch_size:(index + 1) * self.batch_size]
+        batch_landmarks = self.landmarks[index * self.batch_size:(index + 1) * self.batch_size]
+
+        return self._generate_batch(batch_image_paths, batch_gaze_vectors, batch_landmarks)
          
     def on_epoch_end(self):
         """Shuffles data on epoch end and frees memory"""
@@ -65,39 +69,40 @@ class MPIIFaceGazeGenerator(Sequence):
             indices = np.arange(len(self.image_paths))
             np.random.shuffle(indices)
             self.image_paths = [self.image_paths[i] for i in indices]
-            self.annotations = self.annotations[indices]
+            self.gaze_vectors = self.gaze_vectors[indices]
             gc.collect()
             tf.keras.backend.clear_session()
             tf.compat.v1.reset_default_graph()
             
-    def _generate_batch(self, batch_image_paths, batch_annotations):
+    def _generate_batch(self, batch_image_paths, batch_gaze_vectors, batch_landmarks):
         """
         Generates the next batch applying preprocessing to the images
 
-        batch_image_paths : Batch containing image path strings
-        batch_annotations : Batch containing annotations 
-
-        images            : Correctly shaped batch with images
-        batch_annotations : Correctly shaped batch with annotations
-
+        batch_image_paths  : Batch containing image path strings
+        batch_gaze_vectors : Batch containing gaze_vectors 
+        batch_landmarks    : Batch containing 6 landmarks list 
+        
         """
         images = []
 
-        for image_path in batch_image_paths:
-            image = cv2.imread(image_path)
-
-            # Cut out black pixel
-            y_nonzero, x_nonzero, _ = np.nonzero(image)
-            image = image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
-
+        for image_path, landmarks in zip(batch_image_paths, batch_landmarks):
+            img = cv2.imread(image_path)
+          
             # Load camera calibration
             calib_path = os.path.join(os.path.dirname(os.path.dirname(image_path)), "Calibration", "Camera.mat") 
             calib_data = load_calibration(calib_path)
-            image = undistort_image(image, calib_data["cameraMatrix"], calib_data["distCoeffs"])
+            img = undistort_image(img, calib_data["cameraMatrix"], calib_data["distCoeffs"])
+
+            # Cut out black pixel
+            y_nonzero, x_nonzero, _ = np.nonzero(img)
+            cut_y = [np.min(y_nonzero), np.max(y_nonzero)]
+            cut_x = [np.min(x_nonzero), np.max(x_nonzero)]
+
+            img = img[cut_y[0]:cut_y[1], cut_x[0]:cut_x[1]]
 
             # Image pre-processing
-            image = preprocess_image(image, self.image_size)
-            images.append(image)
+            img = preprocess_image(img, self.image_size, landmarks, cut_x[0], cut_y[0])
+            images.append(img)
             
         images = np.array(images)
 
@@ -105,10 +110,10 @@ class MPIIFaceGazeGenerator(Sequence):
         images = images.reshape((self.batch_size, 1, -1))
         images = np.tile(images, (1, self.n_steps, 1))
 
-        # Reshape annotations for NengoDL
-        batch_annotations = np.array(batch_annotations) 
-        batch_annotations = batch_annotations.reshape((self.batch_size, 1, -1)) 
-        batch_annotations = np.tile(batch_annotations, (1, self.n_steps, 1))
+        # Reshape gaze_vectors for NengoDL
+        batch_gaze_vectors = np.array(batch_gaze_vectors) 
+        batch_gaze_vectors = batch_gaze_vectors.reshape((self.batch_size, 1, -1)) 
+        batch_gaze_vectors = np.tile(batch_gaze_vectors, (1, self.n_steps, 1))
 
         return {"n_steps": np.ones((self.batch_size, 1), dtype=np.int32), 
                 "input_1":images,
@@ -117,12 +122,12 @@ class MPIIFaceGazeGenerator(Sequence):
                 "conv2d_2.0.bias":np.ones((self.batch_size, 384, 1), dtype=np.int32),
                 "conv2d_3.0.bias":np.ones((self.batch_size, 384, 1), dtype=np.int32),
                 "conv2d_4.0.bias":np.ones((self.batch_size, 256, 1), dtype=np.int32),
-                "dense_2.0.bias":np.ones((self.batch_size, batch_annotations.shape[-1], 1), dtype=np.int32)
-                }, {'probe': batch_annotations}
+                "dense_2.0.bias":np.ones((self.batch_size, batch_gaze_vectors.shape[-1], 1), dtype=np.int32)
+                }, {'probe': batch_gaze_vectors}
 
 def load_data(dataset_dir, test_split, train_split, seed=0, load_percentage=1.0):
     """
-    Loads dataset information and extracts annotations
+    Loads dataset information and extracts gaze_vectors
 
     dataset_dir     : Path to dataset directory
     train_split     : Percentage of train data out of the train+evaluation data
@@ -130,11 +135,12 @@ def load_data(dataset_dir, test_split, train_split, seed=0, load_percentage=1.0)
     seed            : Shuffle seed to avoid data contamination
     load_percentage : Percentage of the dataset to load
 
-    Returns the path to train images, train annotations, path to evaluation images,
-    evaluation annotations, path to test images, and test annotations in a tuple
+    Returns the path to train images, train gaze_vectors, path to evaluation images,
+    evaluation gaze_vectors, path to test images, and test gaze_vectors in a tuple
     """
     image_paths = []
-    annotations = []
+    gaze_vectors = []
+    landmarks_list = []
 
     # Save paths of jpg files in subfolders
     for root, _, files in os.walk(dataset_dir):
@@ -153,39 +159,62 @@ def load_data(dataset_dir, test_split, train_split, seed=0, load_percentage=1.0)
             if file.endswith('.txt'):
                 df = pd.read_csv(os.path.join(root, file), sep=" ", header=None)
 
-                # ( 21, 22, 23 ) = Face center = fc
-                # ( 24, 25, 26 ) = Gaze Target = gt
-                # Gaze direction = gt - fc in Camera Coordinates
+                # From MPIIFaceGaze
+                # http://dx.doi.org/10.1109/TPAMI.2017.2778103
+                #
+                # Dimension 1: image file path and name.
+                # Dimension 2~3: Gaze location on the screen coordinate in pixels, 
+                # the actual screen size can be found in the "Calibration" folder.
+                # Dimension 4~15: (x,y) position for the six facial landmarks, 
+                # which are four eye corners and two mouth corners.
+                # Dimension 16~21: The estimated 3D head pose in the camera coordinate system 
+                # Dimension 22~24 (fc): Face center in the camera coordinate system, which is averaged 3D location of the 6 focal landmarks face model.
+                # Dimension 25~27 (gt): The 3D gaze target location in the camera coordinate system. 
+                # The gaze direction can be calculated as gt - fc.
+                # Dimension 28: Which eye (left or right) is used for the evaluation subset.
+                #
 
                 fc = df.iloc[:, 21:24].values
                 gt = df.iloc[:, 24:27].values
 
-                annotation = gt - fc
-                annotations.extend(annotation)
+                landmarks = df.iloc[:, 3:15].values
 
-    annotations = np.array(annotations)
+                annotation = gt - fc
+                gaze_vectors.extend(annotation)
+                landmarks_list.extend(landmarks)
+
+    gaze_vectors = np.array(gaze_vectors)
 
     # Load only the desired percentage of data
-    annotations = annotations[:num_samples_to_load]
-    image_paths, annotations = shuffle(image_paths, annotations, random_state=seed)
+    gaze_vectors = gaze_vectors[:num_samples_to_load]
+    landmarks_list = landmarks_list[:num_samples_to_load]
+
+    image_paths, gaze_vectors, landmarks_list = shuffle(image_paths, gaze_vectors, landmarks_list, random_state=seed)
 
     # Train+eval / test split
     test_index = int((1 - test_split) * num_samples_to_load)
     train_and_eval_image_paths = image_paths[:test_index]
-    train_and_eval_annotations = annotations[:test_index]
+    train_and_eval_gaze_vectors = gaze_vectors[:test_index]
+    train_and_eval_landmarks = landmarks_list[:test_index]
+
     test_image_paths = image_paths[test_index:]
-    test_annotations = annotations[test_index:]
+    test_gaze_vectors = gaze_vectors[test_index:]
+    test_landmarks = landmarks_list[test_index:]
 
     # Train/eval split
     train_index = int(train_split * len(train_and_eval_image_paths))
 
     train_image_paths = train_and_eval_image_paths[:train_index]
-    train_annotations = train_and_eval_annotations[:train_index]
+    train_gaze_vectors = train_and_eval_gaze_vectors[:train_index]
+    train_landmarks = train_and_eval_landmarks[:train_index]
 
     eval_image_paths = train_and_eval_image_paths[train_index:]
-    eval_annotations = train_and_eval_annotations[train_index:]
+    eval_gaze_vectors = train_and_eval_gaze_vectors[train_index:]
+    eval_landmarks = landmarks_list[train_index:]
 
-    return train_image_paths, train_annotations, eval_image_paths, eval_annotations, test_image_paths, test_annotations
+    return train_image_paths, train_gaze_vectors, train_landmarks, \
+           eval_image_paths,  eval_gaze_vectors,  eval_landmarks,  \
+           test_image_paths,  test_gaze_vectors,  test_landmarks
 
 def load_calibration(calibration_file):
     """ 
@@ -222,17 +251,22 @@ def undistort_image(image, camera_matrix, dist_coeffs):
 
     return undistorted_image
 
-def preprocess_image(image, new_size):
+def preprocess_image(image, new_size, landmarks, cut_x=0, cut_y=0):
     """
     Image preprocessing
 
-    image    : Input image
-    new_size : Input image resize goal
-    
+    image     : Input image
+    new_size  : Input images resize goal
+    landmarks : Input images facial landmarks
     returns the processed image
     """
-    image = cv2.resize(image, new_size)
     
+    # Resize image
+    image = cv2.resize(image, new_size)
+
+    # Align image
+    image = align_eyes(image, landmarks, cut_x, cut_y)
+
     # Crop to get a square image
     height, width, _ = image.shape
     square_size = min(height, width)
@@ -249,8 +283,39 @@ def preprocess_image(image, new_size):
     # Convert in grayscale and apply histogram equalization
     image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     image = cv2.equalizeHist(image)
-    
+
     # Normalization
     image = image.astype('float32') / 255.0
     
     return image
+
+def align_eyes(image, landmarks, cut_x, cut_y):
+    """
+    Aligns the eyes to be at the same position in the image using the provided landmarks
+
+    image     : Input image
+    landmarks : Providing the position for each eye in the image
+    cut_x     : X cut offset
+    cut_y     : Y cut offset
+    return the aligned image
+    """       
+
+    # Coordinates for the left and right eye centers
+    left_eye_coords = ((landmarks[0] + landmarks[2]) / 2  - cut_x, (landmarks[1] + landmarks[3]) / 2 - cut_y)
+    right_eye_coords = ((landmarks[4] + landmarks[6]) / 2  - cut_x, (landmarks[5] + landmarks[7]) / 2 - cut_y)
+
+    # Angle between the eye coordinates
+    dy = right_eye_coords[1] - left_eye_coords[1]
+    dx = right_eye_coords[0] - left_eye_coords[0]
+    angle = np.arctan2(dy, dx) * 180. / np.pi
+
+    # Averaged center between landmarks
+    avg_x = (landmarks[0] + landmarks[2] + landmarks[4] + landmarks[6] + landmarks[8] + landmarks[10]) / 6 - cut_x
+    avg_y = (landmarks[1] + landmarks[3] + landmarks[5] + landmarks[7] + landmarks[9] + landmarks[11]) / 6 - cut_y
+    rotation_center = (avg_x, avg_y)
+
+    # Rotation matrix for rotating the face around its center
+    M = cv2.getRotationMatrix2D(rotation_center, angle, 1)
+    aligned_image = cv2.warpAffine(image, M, (image.shape[1], image.shape[0]), flags=cv2.INTER_CUBIC)
+
+    return aligned_image

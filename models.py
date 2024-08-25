@@ -128,10 +128,10 @@ class NengoGazeModel():
         tensorboard_callback = nengo_dl.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True)
 
         # Create data generator
-        train_image_paths, train_annotations, eval_image_paths, eval_annotations  = dataset
+        train_image_paths, train_annotations, train_landmarks, eval_image_paths, eval_annotations, eval_landmarks  = dataset
 
-        train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
-        eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, train_landmarks , self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, eval_landmarks, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
 
         # Training
         with self.converter.net:
@@ -347,7 +347,7 @@ class NengoGazeModel():
 
         dataset : Tuple containing test image paths, test annotations
         """
-        test_image_paths, test_annotations = dataset
+        test_image_paths, test_annotations, test_landmarks = dataset
 
         fig = plt.figure(figsize=(20, 15))
 
@@ -366,12 +366,14 @@ class NengoGazeModel():
                 calib_data = load_calibration(calib_path)
                 img = undistort_image(img, calib_data["cameraMatrix"], calib_data["distCoeffs"])
 
-                # Cut out black pixels
+                # Cut out black pixel
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
-                img = img[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+                cut_y = [np.min(y_nonzero), np.max(y_nonzero)]
+                cut_x = [np.min(x_nonzero), np.max(x_nonzero)]
+                img = img[cut_y[0]:cut_y[1], cut_x[0]:cut_x[1]]
 
                 # Image preprocessing and reshape
-                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]))
+                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]), test_landmarks[rand_index], cut_x[0], cut_y[0])
                 inp_img = img.reshape(1, 1, self.input_shape[0] * self.input_shape[1])
 
                 inp_img = np.tile(inp_img, (1, self.n_steps, 1))

@@ -31,8 +31,8 @@ def main(args):
 
     IMAGE_SIZE = (224, 224, 1) # Half size for less memory usage
 
-    dataset = load_data(args.dataset_dir, args.test_split, args.train_split, seed=879372)
-    train_dataset, test_dataset = dataset[:4], dataset[4:]
+    dataset = load_data(args.dataset_dir, args.test_split, args.train_split, seed=0)
+    train_dataset, test_dataset = dataset[:6], dataset[6:]
 
     if (args.action == "train"):
         args.n_steps = 1   # we present the images only once since it's a non-spiking network being trained
