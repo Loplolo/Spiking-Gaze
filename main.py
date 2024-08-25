@@ -89,8 +89,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
-    parser.add_argument('--n_steps', type=int, default=100, help='Nengo_dl number of steps for each image')
-    parser.add_argument('--synapse', type=float, default=0.01, help='Nengo_dl synapse filter')
+    parser.add_argument('--n_steps', type=int, default=80, help='Nengo_dl number of steps for each image')
+    parser.add_argument('--synapse', type=float, default=0.005, help='Nengo_dl synapse filter')
     parser.add_argument('--sfr', type=int, default=100, help='Nengo_dl scale firing rate')
 
     parser.add_argument('--save', type=str, help='Path to save the model')
