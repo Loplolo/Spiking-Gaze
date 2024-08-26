@@ -267,7 +267,7 @@ class NengoGazeModel():
             ),
             print_warnings=False,)
         
-    def plot_spikes(self, probe, spikes, sfr, test_data_idx=0, num_neurons=64, dt=0.001):
+    def plot_spikes(self, probe, spikes, sfr, test_data_idx=0, num_neurons=512, dt=0.001):
         """
         Plots the spikes of the layer corresponding to the `probe`.
 
@@ -477,10 +477,10 @@ def gaze_estimation_model(input_shape, output_shape):
 
     flat = tf.keras.layers.Flatten()(avgpool3)
 
-    dense1 = tf.keras.layers.Dense(128, activation='relu', kernel_initializer="he_uniform")(flat)
+    dense1 = tf.keras.layers.Dense(4096, activation='relu', kernel_initializer="he_uniform")(flat)
     layer_objs_lst.append(dense1)
 
-    dense2 = tf.keras.layers.Dense(64, activation='relu', kernel_initializer="he_uniform")(dense1)
+    dense2 = tf.keras.layers.Dense(4096, activation='relu', kernel_initializer="he_uniform")(dense1)
     layer_objs_lst.append(dense2)
 
     out = tf.keras.layers.Dense(output_shape, activation='linear')(dense2) 

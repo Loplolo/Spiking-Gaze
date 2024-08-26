@@ -309,10 +309,8 @@ def align_eyes(image, landmarks, cut_x, cut_y):
     dx = right_eye_coords[0] - left_eye_coords[0]
     angle = np.arctan2(dy, dx) * 180. / np.pi
 
-    # Averaged center between landmarks
-    avg_x = (landmarks[0] + landmarks[2] + landmarks[4] + landmarks[6] + landmarks[8] + landmarks[10]) / 6 - cut_x
-    avg_y = (landmarks[1] + landmarks[3] + landmarks[5] + landmarks[7] + landmarks[9] + landmarks[11]) / 6 - cut_y
-    rotation_center = (avg_x, avg_y)
+    # Rotate the image around it's center
+    rotation_center = (image.shape[1]/2, image.shape[0]/2)
 
     # Rotation matrix for rotating the face around its center
     M = cv2.getRotationMatrix2D(rotation_center, angle, 1)
