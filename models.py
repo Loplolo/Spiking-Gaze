@@ -184,8 +184,8 @@ class NengoGazeModel():
         returns the collected spikes
         """
         # Create data generator
-        test_image_paths, test_annotations  = dataset
-        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        test_image_paths, test_annotations, test_landmarks = dataset
+        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, test_landmarks, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
 
         n_images = len(test_image_paths)
 
@@ -246,8 +246,8 @@ class NengoGazeModel():
         dataset : Tuple containing test image paths and test annotations
         """
         # Create data generator
-        test_image_paths, test_annotations  = dataset
-        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        test_image_paths, test_annotations, test_landmarks = dataset
+        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, test_landmarks, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
 
         example_data = test_generator[0][0]['input_1'][:, -1, :]
         example_data = example_data.reshape((self.batch_size, self.input_shape[0], self.input_shape[1], 1)) 
