@@ -234,7 +234,7 @@ class FaceProcessor:
                         with open(os.path.join(self.path, 'annotations.txt'), 'a') as file:
                             file.write(f"{relative_filename} " +           # Relative path
                                     f"{gaze_point[0]} {gaze_point[1]} " +  # Screen Coordinate 2D 
-                                    points_string +                        # Flattened corner points
+                                    points_string + " "                    # Flattened corner points
                                     "0 " * 6 +                             # No 3D model informations
                                     f"{face_center_x} {face_center_y} " +  # Face center coordinates
                                     f"{distance} " +                       # Distance
