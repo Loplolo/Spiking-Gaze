@@ -22,7 +22,7 @@ class MPIIFaceGazeGenerator(Sequence):
     """ Defines a data generator for the MPIIFaceGaze dataset adapted to
         nengo_dl input specifications and applying preprocessing."""
 
-    def __init__(self, image_paths, gaze_vectors, landmarks, batch_size, image_size=(224, 224), n_steps=1, shuffle=True):
+    def __init__(self, image_paths, gaze_vectors, landmarks, batch_size, eyes_only=False, image_size=(224, 224), n_steps=1, shuffle=True):
 
         """
         Generator initialization
@@ -43,6 +43,7 @@ class MPIIFaceGazeGenerator(Sequence):
         self.image_size = image_size
         self.shuffle = shuffle
         self.n_steps = n_steps
+        self.eyes_only = eyes_only
         self.on_epoch_end()
 
     def __len__(self):
@@ -88,20 +89,15 @@ class MPIIFaceGazeGenerator(Sequence):
         for image_path, landmarks in zip(batch_image_paths, batch_landmarks):
             img = cv2.imread(image_path)
           
-            # Load camera calibration
-            calib_path = os.path.join(os.path.dirname(os.path.dirname(image_path)), "Calibration", "Camera.mat") 
-            calib_data = load_calibration(calib_path)
-            img = undistort_image(img, calib_data["cameraMatrix"], calib_data["distCoeffs"])
-
             # Cut out black pixel
             y_nonzero, x_nonzero, _ = np.nonzero(img)
             cut_y = [np.min(y_nonzero), np.max(y_nonzero)]
             cut_x = [np.min(x_nonzero), np.max(x_nonzero)]
-
             img = img[cut_y[0]:cut_y[1], cut_x[0]:cut_x[1]]
 
             # Image pre-processing
-            img = preprocess_image(img, self.image_size, landmarks, cut_x[0], cut_y[0])
+            img = preprocess_image(img, image_path, self.image_size, landmarks, self.eyes_only, cut_x[0], cut_y[0])
+
             images.append(img)
             
         images = np.array(images)
@@ -132,7 +128,7 @@ def load_data(dataset_dir, test_split, train_split, seed=0, load_percentage=1.0)
     dataset_dir     : Path to dataset directory
     train_split     : Percentage of train data out of the train+evaluation data
     test_split      : Percentage of total data to use for testing
-    seed            : Shuffle seed to avoid data contamination
+    seed            : Shuffle seed
     load_percentage : Percentage of the dataset to load
 
     Returns the path to train images, train gaze_vectors, path to evaluation images,
@@ -224,7 +220,6 @@ def load_calibration(calibration_file):
 
     returns a dictionary containing the loaded calibration informations
     """
-
     _ , filetype = os.path.splitext(calibration_file)
 
     if filetype == '.mat':
@@ -251,21 +246,71 @@ def undistort_image(image, camera_matrix, dist_coeffs):
 
     return undistorted_image
 
-def preprocess_image(image, new_size, landmarks, cut_x=0, cut_y=0):
+def preprocess_image(image, image_path, new_size, landmarks, eyes_only, cut_x=0, cut_y=0):
     """
     Image preprocessing
 
     image     : Input image
     new_size  : Input images resize goal
     landmarks : Input images facial landmarks
+    eyes_only : Consider eyes only
     returns the processed image
     """
     
-    # Resize image
-    image = cv2.resize(image, new_size)
-
     # Align image
     image = align_eyes(image, landmarks, cut_x, cut_y)
+
+    # Consider eyes only
+    if eyes_only:
+        # Get eyes bounding boxes
+        left_x1, left_y1, left_x2, left_y2 = landmarks[0:4]
+        left_width = int(np.linalg.norm([left_x2 - left_x1, left_y2 - left_y1])) + 40
+        left_mid = ((left_x1 + left_x2) // 2 - cut_x, (left_y1 + left_y2) // 2 - cut_y)
+        left_height = int(left_width)
+
+        l_bbox = [
+            left_mid[0] - left_width // 2, 
+            left_mid[1] - left_height // 2, 
+            left_mid[0] + left_width // 2, 
+            left_mid[1] + left_height // 2
+        ]
+
+        right_x1, right_y1, right_x2, right_y2 = landmarks[4:8]
+        right_width = int(np.linalg.norm([right_x2 - right_x1, right_y2 - right_y1])) + 40
+        right_mid = ((right_x1 + right_x2) // 2 - cut_x, (right_y1 + right_y2) // 2 - cut_y)
+        right_height = int(right_width)
+
+        r_bbox = [
+            right_mid[0] - right_width // 2, 
+            right_mid[1] - right_height // 2, 
+            right_mid[0] + right_width // 2 , 
+            right_mid[1] + right_height // 2
+        ]   
+
+        # Black out everything else
+        black_img = np.zeros_like(image)
+
+        black_img[
+            l_bbox[1]:l_bbox[3], 
+            l_bbox[0]:l_bbox[2]
+        ] = image[
+            l_bbox[1]:l_bbox[3], 
+            l_bbox[0]:l_bbox[2]
+        ]
+
+        black_img[
+            r_bbox[1]:r_bbox[3], 
+            r_bbox[0]:r_bbox[2]
+        ] = image[
+            r_bbox[1]:r_bbox[3], 
+            r_bbox[0]:r_bbox[2]
+        ]
+        image = black_img
+
+    # Undistort image
+    calib_path = os.path.join(os.path.dirname(os.path.dirname(image_path)), "Calibration", "Camera.mat") 
+    calib_data = load_calibration(calib_path)
+    image = undistort_image(image, calib_data["cameraMatrix"], calib_data["distCoeffs"])
 
     # Crop to get a square image
     height, width, _ = image.shape
@@ -280,13 +325,15 @@ def preprocess_image(image, new_size, landmarks, cut_x=0, cut_y=0):
 
     image = image[y_start:y_start + square_size, x_start:x_start + square_size]
 
+    # Resize image
+    image = cv2.resize(image, new_size)
+
     # Convert in grayscale and apply histogram equalization
     image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     image = cv2.equalizeHist(image)
 
     # Normalization
     image = image.astype('float32') / 255.0
-    
     return image
 
 def align_eyes(image, landmarks, cut_x, cut_y):

@@ -19,8 +19,7 @@ from keras.callbacks import EarlyStopping
 
 from keras_spiking import ModelEnergy
 
-from utils import MPIIFaceGazeGenerator, preprocess_image, undistort_image, load_calibration
-
+from utils import MPIIFaceGazeGenerator, preprocess_image
 
 ##
 # models.py
@@ -41,16 +40,19 @@ class NengoGazeModel():
     Wrapper for Gaze prediction, training and evaluation using a Nengo_dl model
     """
 
-    def __init__(self, input_shape, output_shape, batch_size, n_steps=1):
+    def __init__(self, input_shape, output_shape, batch_size, eyes_only, n_steps=1):
         """!
         input_shape  : Model's input shape
         output_shape : Model's output shape
         batch_size   : Training and Evaluation batch size
-        
+        eyes_only    : Consider only eyes region
+        n_steps      : Number of timesteps for spiking model input
+
         """
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.batch_size = batch_size
+        self.eyes_only = eyes_only
         self.n_steps = n_steps
         self.sim = None
         self.layer_objs_lst = []
@@ -109,8 +111,8 @@ class NengoGazeModel():
         """
         Creates dataset generator and trains the model
 
-        dataset  : Tuple containing train image paths, train annotations, eval image_paths and eval annotations
-        n_epochs : Number of epochs for training
+        dataset   : Tuple containing train image paths, train annotations, eval image_paths and eval annotations
+        n_epochs  : Number of epochs for training
         """
 
         log_dir = "logs/nengo_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -130,8 +132,8 @@ class NengoGazeModel():
         # Create data generator
         train_image_paths, train_annotations, train_landmarks, eval_image_paths, eval_annotations, eval_landmarks  = dataset
 
-        train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, train_landmarks , self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
-        eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, eval_landmarks, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        train_generator = MPIIFaceGazeGenerator(train_image_paths, train_annotations, train_landmarks, eyes_only=self.eyes_only, batch_size=self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        eval_generator  = MPIIFaceGazeGenerator(eval_image_paths, eval_annotations, eval_landmarks, eyes_only=self.eyes_only, batch_size=self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
 
         # Training
         with self.converter.net:
@@ -185,7 +187,7 @@ class NengoGazeModel():
         """
         # Create data generator
         test_image_paths, test_annotations, test_landmarks = dataset
-        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, test_landmarks, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, test_landmarks, eyes_only=self.eyes_only, batch_size=self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
 
         n_images = len(test_image_paths)
 
@@ -242,12 +244,11 @@ class NengoGazeModel():
     def energyEstimates(self, dataset):
         """
         Model energy estimates
-
         dataset : Tuple containing test image paths and test annotations
         """
         # Create data generator
         test_image_paths, test_annotations, test_landmarks = dataset
-        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, test_landmarks, self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
+        test_generator  = MPIIFaceGazeGenerator(test_image_paths, test_annotations, test_landmarks, eyes_only=self.eyes_only, batch_size=self.batch_size, n_steps=self.n_steps, image_size=self.input_shape[:2])
 
         example_data = test_generator[0][0]['input_1'][:, -1, :]
         example_data = example_data.reshape((self.batch_size, self.input_shape[0], self.input_shape[1], 1)) 
@@ -314,8 +315,6 @@ class NengoGazeModel():
         ax.plot(y_pred, color='red',)
 
         plt.tight_layout()
-        
-
 
     def plot_metrics_timesteps(self, y_true, y_pred, metrics):
         metrics_over_time = {metric.name: [] for metric in metrics}
@@ -361,21 +360,17 @@ class NengoGazeModel():
                 im_path = test_image_paths[rand_index]
                 img = cv2.imread(im_path)
 
-                # Image undistortion
-                calib_path = os.path.join(os.path.dirname(os.path.dirname(im_path)), "Calibration", "Camera.mat") 
-                calib_data = load_calibration(calib_path)
-                img = undistort_image(img, calib_data["cameraMatrix"], calib_data["distCoeffs"])
-
                 # Cut out black pixel
                 y_nonzero, x_nonzero, _ = np.nonzero(img)
                 cut_y = [np.min(y_nonzero), np.max(y_nonzero)]
                 cut_x = [np.min(x_nonzero), np.max(x_nonzero)]
-                img = img[cut_y[0]:cut_y[1], cut_x[0]:cut_x[1]]
+                img = img[cut_y[0]:cut_y[1], cut_x[0]:cut_x[1]]          
 
-                # Image preprocessing and reshape
-                img = preprocess_image(img, (self.input_shape[0], self.input_shape[1]), test_landmarks[rand_index], cut_x[0], cut_y[0])
+                # Image preprocessing
+                img = preprocess_image(img, im_path, (self.input_shape[0], self.input_shape[1]), test_landmarks[rand_index], self.eyes_only, cut_x[0], cut_y[0])
+
+                # Reshaping for nengo_dl network
                 inp_img = img.reshape(1, 1, self.input_shape[0] * self.input_shape[1])
-
                 inp_img = np.tile(inp_img, (1, self.n_steps, 1))
 
                 img_ax = fig.add_subplot(3, 6, 2 * index + 2)

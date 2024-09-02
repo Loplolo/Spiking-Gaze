@@ -37,7 +37,7 @@ def main(args):
     if (args.action == "train"):
         args.n_steps = 1   # we present the images only once since it's a non-spiking network being trained
 
-    gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, batch_size=args.batch_size, n_steps=args.n_steps)
+    gazeModel = NengoGazeModel(input_shape=IMAGE_SIZE, output_shape=3, eyes_only=args.eyes_only, batch_size=args.batch_size, n_steps=args.n_steps)
     gazeModel.create_model()
 
     if (args.type == 'snn' and args.action == "train") or (args.type == "ann"):
@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
     parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train')
-    parser.add_argument('--patience', type=int, default=5, help='Number of epochs with no change before early stopping')
+    parser.add_argument('--patience', type=int, default=10, help='Number of epochs with no change before early stopping')
 
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
@@ -95,6 +95,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--save', type=str, help='Path to save the model')
     parser.add_argument('--load', type=str, help='Path to load a pre-trained model')
+
+    parser.add_argument('--eyes_only', action='store_true', help='Consider only eye region')
 
     args = parser.parse_args()
     main(args)
