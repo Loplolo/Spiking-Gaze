@@ -262,12 +262,13 @@ def preprocess_image(image, image_path, new_shape, landmarks, eyes_only, cut_x=0
     # Align image
     image = align_eyes(image, landmarks, cut_x, cut_y)
 
-    # Consider eyes only
     if eyes_only:
+
         # Get eyes bounding boxes
         left_x1, left_y1, left_x2, left_y2 = landmarks[0:4]
-        left_width = int(np.linalg.norm([left_x2 - left_x1, left_y2 - left_y1])) + 40
-        left_mid = ((left_x1 + left_x2) // 2 - cut_x, (left_y1 + left_y2) // 2 - cut_y)
+        left_min_x, left_max_x, left_min_y, left_max_y = min(left_x1, left_x2), max(left_x1, left_x2), min(left_y1, left_y2), max(left_y1, left_y2)
+        left_width = int(np.linalg.norm([left_max_x - left_min_x, left_max_y - left_min_y]) * 1.5)
+        left_mid = ((left_min_x + left_max_x) // 2 - cut_x, (left_min_y + left_max_y) // 2 - cut_y)
         left_height = int(left_width)
 
         l_bbox = [
@@ -277,58 +278,60 @@ def preprocess_image(image, image_path, new_shape, landmarks, eyes_only, cut_x=0
             left_mid[1] + left_height // 2
         ]
 
+        l_bbox = [max(0, x) for x in l_bbox]
+
         right_x1, right_y1, right_x2, right_y2 = landmarks[4:8]
-        right_width = int(np.linalg.norm([right_x2 - right_x1, right_y2 - right_y1])) + 40
-        right_mid = ((right_x1 + right_x2) // 2 - cut_x, (right_y1 + right_y2) // 2 - cut_y)
+        right_min_x, right_max_x, right_min_y, right_max_y= min(right_x1, right_x2), max(right_x1, right_x2), min(right_y1, right_y2), max(right_y1, right_y2)
+        right_width = int(np.linalg.norm([right_max_x - right_min_x, right_max_y - right_min_y]) * 1.5)  
+        right_mid = ((right_min_x + right_max_x) // 2 - cut_x, (right_min_y + right_max_y) // 2 - cut_y)
         right_height = int(right_width)
 
         r_bbox = [
             right_mid[0] - right_width // 2, 
             right_mid[1] - right_height // 2, 
-            right_mid[0] + right_width // 2 , 
+            right_mid[0] + right_width // 2, 
             right_mid[1] + right_height // 2
-        ]   
-
-        # Black out everything else
-        black_img = np.zeros_like(image)
-
-        black_img[
-            l_bbox[1]:l_bbox[3], 
-            l_bbox[0]:l_bbox[2]
-        ] = image[
-            l_bbox[1]:l_bbox[3], 
-            l_bbox[0]:l_bbox[2]
         ]
 
-        black_img[
-            r_bbox[1]:r_bbox[3], 
-            r_bbox[0]:r_bbox[2]
-        ] = image[
-            r_bbox[1]:r_bbox[3], 
-            r_bbox[0]:r_bbox[2]
+        l_bbox = [max(0, x) for x in l_bbox]
+
+        # Combine left and right bounding boxes and crop image to
+        combined_bbox = [
+            min(l_bbox[0], r_bbox[0]),  # x_min
+            min(l_bbox[1], r_bbox[1]),  # y_min
+            max(l_bbox[2], r_bbox[2]),  # x_max
+            max(l_bbox[3], r_bbox[3])   # y_max
         ]
-        image = black_img
 
-    # Undistort image
-    calib_path = os.path.join(os.path.dirname(os.path.dirname(image_path)), "Calibration", "Camera.mat") 
-    calib_data = load_calibration(calib_path)
-    image = undistort_image(image, calib_data["cameraMatrix"], calib_data["distCoeffs"])
+        # Black out everything but the eyes region
+        black_image = np.zeros_like(image, dtype=np.uint8)
 
-    # Crop to get a square image
-    height, width, _ = image.shape
-    square_size = min(height, width)
+        black_image[combined_bbox[1]:combined_bbox[3], combined_bbox[0]:combined_bbox[2]] = \
+              image[combined_bbox[1]:combined_bbox[3], combined_bbox[0]:combined_bbox[2]]
+        
+        image = black_image
 
-    if width > height:
-        x_start = (width - square_size) // 2
-        y_start = 0
     else:
-        x_start = 0
-        y_start = (height - square_size) // 2
+        # Undistort image
+        calib_path = os.path.join(os.path.dirname(os.path.dirname(image_path)), "Calibration", "Camera.mat") 
+        calib_data = load_calibration(calib_path)
+        image = undistort_image(image, calib_data["cameraMatrix"], calib_data["distCoeffs"])
 
-    image = image[y_start:y_start + square_size, x_start:x_start + square_size]
+        # Crop to get a square image
+        height, width, _ = image.shape
+        square_size = min(height, width)
 
+        if width > height:
+            x_start = (width - square_size) // 2
+            y_start = 0
+        else:
+            x_start = 0
+            y_start = (height - square_size) // 2
+
+        image = image[y_start:y_start + square_size, x_start:x_start + square_size]
+    
     # Resize image
-    image = cv2.resize(image, new_size)
+    image = cv2.resize(image, new_shape)
 
     # Convert in grayscale and apply histogram equalization
     image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
