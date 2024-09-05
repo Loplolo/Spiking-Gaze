@@ -186,12 +186,12 @@ class FaceProcessor:
                         shape = self.predictor(gray, face_rect)
 
                         six_landmarks = [
-                            (shape.part(36).x, shape.part(36).y),  # Left eye outer corner
-                            (shape.part(39).x, shape.part(39).y),  # Left eye inner corner
-                            (shape.part(42).x, shape.part(42).y),  # Right eye outer corner
-                            (shape.part(45).x, shape.part(45).y),  # Right eye inner corner
-                            (shape.part(48).x, shape.part(48).y),  # Mouth left corner
-                            (shape.part(54).x, shape.part(54).y)   # Mouth right corner
+                            (shape.part(36).x - x, shape.part(36).y - y),  # Left eye outer corner
+                            (shape.part(39).x - x, shape.part(39).y - y),  # Left eye inner corner
+                            (shape.part(42).x - x, shape.part(42).y - y),  # Right eye outer corner
+                            (shape.part(45).x - x, shape.part(45).y - y),  # Right eye inner corner
+                            (shape.part(48).x - x, shape.part(48).y - y),  # Mouth left corner
+                            (shape.part(54).x - x, shape.part(54).y - y)   # Mouth right corner
                         ]
 
                         left_eye = ((six_landmarks[0][0] + six_landmarks[1][0]) / 2, (six_landmarks[0][1] + six_landmarks[1][1]) / 2)
@@ -234,8 +234,8 @@ class FaceProcessor:
                         with open(os.path.join(self.path, 'annotations.txt'), 'a') as file:
                             file.write(f"{relative_filename} " +           # Relative path
                                     f"{gaze_point[0]} {gaze_point[1]} " +  # Screen Coordinate 2D 
-                                    points_string + " "                    # Flattened corner points
-                                    "0 " * 6 +                             # No 3D model informations
+                                    points_string +                        # Flattened corner points
+                                    " 0 0 0 0 0 0 " +                      # No 3D model informations
                                     f"{face_center_x} {face_center_y} " +  # Face center coordinates
                                     f"{distance} " +                       # Distance
                                     f"{camera_gaze_point[0][0]} " +        # Camera gaze point X
