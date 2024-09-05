@@ -259,12 +259,9 @@ class NengoGazeModel():
             columns=(
                 "name",
                 "rate",
-                "synop_energy cpu",
-                "synop_energy gpu",
-                "synop_energy loihi",
-                "neuron_energy cpu",
-                "synop_energy gpu",
-                "neuron_energy loihi",
+                "energy cpu",
+                "energy gpu",
+                "energy loihi",
             ),
             print_warnings=False,)
         
@@ -379,7 +376,7 @@ class NengoGazeModel():
 
                 ax = fig.add_subplot(3, 6, 2 * index + 1, projection='3d')
 
-                # Ground truth vector normalization
+                # vector normalization
                 vector = test_annotations[rand_index] / np.linalg.norm(test_annotations[rand_index])
          
                 ax.quiver(0, 0, 0,
@@ -396,6 +393,7 @@ class NengoGazeModel():
                 # Predicted truth vector normalization
                 predicted_vector = predicted_vector / np.linalg.norm(predicted_vector)
 
+                print(im_path)
                 print(vector)
                 print(predicted_vector)
 
@@ -534,21 +532,11 @@ class AngularDistance(Mean):
         super(AngularDistance, self).__init__(name=name, **kwargs)
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-
-        # Normalize the vectors
         y_true_norm = K.l2_normalize(y_true, axis=-1)
         y_pred_norm = K.l2_normalize(y_pred, axis=-1)
-        
-        # Compute the cosine similarity
         cosine_similarity = K.sum(y_true_norm * y_pred_norm, axis=-1)
-        
-        # Clip values to ensure they are within the valid range
         cosine_similarity = tf.clip_by_value(cosine_similarity, -1.0, 1.0)
-
-        # Calculate the angular distance
         angular_distance = tf.math.acos(cosine_similarity)
-        
-        # Update the state with the computed angular distance
         return super(AngularDistance, self).update_state(angular_distance, sample_weight)
         
 class R2Score(tf.keras.metrics.Metric):

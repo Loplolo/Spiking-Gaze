@@ -93,7 +93,7 @@ if __name__ == '__main__':
     parser.add_argument('--synapse', type=float, default=0.005, help='Nengo_dl synapse filter')
     parser.add_argument('--sfr', type=int, default=100, help='Nengo_dl scale firing rate')
 
-    parser.add_argument('--save', type=str, help='Path to save the model')
+    parser.add_argument('--save', type=str, default="model_00", help='Path to save the model')
     parser.add_argument('--load', type=str, help='Path to load a pre-trained model')
 
     parser.add_argument('--eyes_only', action='store_true', help='Consider only eye region')

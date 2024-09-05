@@ -22,7 +22,7 @@ class MPIIFaceGazeGenerator(Sequence):
     """ Defines a data generator for the MPIIFaceGaze dataset adapted to
         nengo_dl input specifications and applying preprocessing."""
 
-    def __init__(self, image_paths, gaze_vectors, landmarks, batch_size, eyes_only=False, image_size=(224, 224), n_steps=1, shuffle=True):
+    def __init__(self, image_paths, gaze_vectors, landmarks, batch_size, image_size, eyes_only=False, n_steps=1, shuffle=True):
 
         """
         Generator initialization
@@ -31,7 +31,7 @@ class MPIIFaceGazeGenerator(Sequence):
         gaze_vectors : Dataset gaze vectors list
         gaze_vectors : Dataset 6 landmarks list
         batch_size   : Dimension of batches
-        image_size   : (Width, Height) of images 
+        image_size   : Goal (Width, Height) of images 
         n_steps      : n_steps for Nengo_dl simulator (SNN only)
         shuffle      : true if the data should be shuffled
 
@@ -246,14 +246,16 @@ def undistort_image(image, camera_matrix, dist_coeffs):
 
     return undistorted_image
 
-def preprocess_image(image, image_path, new_size, landmarks, eyes_only, cut_x=0, cut_y=0):
+def preprocess_image(image, image_path, new_shape, landmarks, eyes_only, cut_x=0, cut_y=0):
     """
     Image preprocessing
 
     image     : Input image
-    new_size  : Input images resize goal
+    new_shape : Input images resize goal
     landmarks : Input images facial landmarks
     eyes_only : Consider eyes only
+    cut_x     : Width cutting offset from original image 
+    cut_y     : Height cutting offset from original image 
     returns the processed image
     """
     

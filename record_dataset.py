@@ -252,7 +252,7 @@ def main():
     parser = argparse.ArgumentParser(description="Face gaze tracking with distance estimation.")
 
     parser.add_argument('--dataset_dir', type=str, default='./dataset/custom', help='Directory to save faces.')
-    parser.add_argument('--id', type=str, default="p00", help="Person's identificative." )
+    parser.add_argument('--id', type=str, default="p15", help="Person's identificative." )
     parser.add_argument('--day', type=str, default="day01", help="Same day identificative." )
 
     args = parser.parse_args()
