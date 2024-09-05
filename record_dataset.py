@@ -226,16 +226,17 @@ class FaceProcessor:
                         # Save relative filename in the annotations file
                         relative_filename = os.path.relpath(filename, start=os.path.join(filename, '..', '..'))
 
+                        # Offset landmarks to face frame
+                        offset_landmarks = [(pt[0] - x, pt[1] - y) for pt in six_landmarks]
+
                         # concatenate landmarks coordinates and format for writing
-
-                        flattened_points = [str(coord) for pt in six_landmarks for coord in pt]
+                        flattened_points = [str(coord) for pt in offset_landmarks for coord in pt]
                         points_string = ' '.join(flattened_points)
-
                         with open(os.path.join(self.path, 'annotations.txt'), 'a') as file:
                             file.write(f"{relative_filename} " +           # Relative path
                                     f"{gaze_point[0]} {gaze_point[1]} " +  # Screen Coordinate 2D 
                                     points_string + " "                    # Flattened corner points
-                                    "0 " * 6 +                             # No 3D model informations
+                                    "0 0 0 0 0 0 "+                             # No 3D model informations
                                     f"{face_center_x} {face_center_y} " +  # Face center coordinates
                                     f"{distance} " +                       # Distance
                                     f"{camera_gaze_point[0][0]} " +        # Camera gaze point X
@@ -252,7 +253,7 @@ def main():
     parser = argparse.ArgumentParser(description="Face gaze tracking with distance estimation.")
 
     parser.add_argument('--dataset_dir', type=str, default='./dataset/custom', help='Directory to save faces.')
-    parser.add_argument('--id', type=str, default="p15", help="Person's identificative." )
+    parser.add_argument('--id', type=str, default="p00", help="Person's identificative." )
     parser.add_argument('--day', type=str, default="day01", help="Same day identificative." )
 
     args = parser.parse_args()
