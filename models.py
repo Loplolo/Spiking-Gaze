@@ -40,20 +40,22 @@ class NengoGazeModel():
     Wrapper for Gaze prediction, training and evaluation using a Nengo_dl model
     """
 
-    def __init__(self, input_shape, output_shape, batch_size, eyes_only, n_steps=1):
+    def __init__(self, input_shape, output_shape, **kwargs):
         """!
         input_shape  : Model's input shape
         output_shape : Model's output shape
-        batch_size   : Training and Evaluation batch size
-        eyes_only    : Consider only eyes region
-        n_steps      : Number of timesteps for spiking model input
+        kwargs       : Other parameters: 
+                       batch_size, eyes_only, n_steps, alt_model
 
         """
         self.input_shape = input_shape
         self.output_shape = output_shape
-        self.batch_size = batch_size
-        self.eyes_only = eyes_only
-        self.n_steps = n_steps
+
+        self.batch_size = kwargs.get('batch_size')
+        self.eyes_only = kwargs.get('eyes_only')
+        self.n_steps = kwargs.get('n_steps')
+        self.alt_model = kwargs.get('alt_model')
+
         self.sim = None
         self.layer_objs_lst = []
 
@@ -484,9 +486,6 @@ def gaze_estimation_model(input_shape, output_shape):
     return model, layer_objs_lst
 
 class AngularDistanceSD(tf.keras.metrics.Metric):
-    """
-    Keras metric to compute the standard deviation of the angular distances
-    """
     def __init__(self, name='angular_distance_sd', **kwargs):
         super(AngularDistanceSD, self).__init__(name=name, **kwargs)
         self.sum_angles = self.add_weight(name='sum_angles', initializer='zeros')
@@ -494,50 +493,58 @@ class AngularDistanceSD(tf.keras.metrics.Metric):
         self.count = self.add_weight(name='count', initializer='zeros')
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        
-        y_true_norm = K.l2_normalize(y_true, axis=-1)
-        y_pred_norm = K.l2_normalize(y_pred, axis=-1)
-        cosine_similarity = K.sum(y_true_norm * y_pred_norm, axis=-1)
-        
+        y_true_norm = tf.math.l2_normalize(y_true, axis=-1)
+        y_pred_norm = tf.math.l2_normalize(y_pred, axis=-1)
+        cosine_similarity = tf.reduce_sum(y_true_norm * y_pred_norm, axis=-1)
         cosine_similarity = tf.clip_by_value(cosine_similarity, -1.0, 1.0)
-        
-        angles = tf.math.acos(cosine_similarity)
-        
-        self.sum_angles.assign_add(K.sum(angles))
-        self.sum_squared_angles.assign_add(K.sum(K.square(angles)))
-        
+        angles = tf.acos(cosine_similarity)
+        self.sum_angles.assign_add(tf.reduce_sum(angles))
+        self.sum_squared_angles.assign_add(tf.reduce_sum(tf.square(angles)))
         if sample_weight is not None:
-            self.count.assign_add(K.sum(sample_weight))
+            self.count.assign_add(tf.reduce_sum(sample_weight))
         else:
-            self.count.assign_add(K.cast(K.shape(y_true)[0], tf.float32))
+            self.count.assign_add(tf.cast(tf.shape(y_true)[0], tf.float32))
 
     def result(self):
+        if tf.equal(self.count, 0.0):
+            return 0.0
         mean_angle = self.sum_angles / self.count
         mean_square_angle = self.sum_squared_angles / self.count
-        variance_angle = mean_square_angle - K.square(mean_angle)
-        
-        variance_angle = K.maximum(variance_angle, 0.0)
-        
-        return K.sqrt(variance_angle)
+        variance_angle = mean_square_angle - tf.square(mean_angle)
+        variance_angle = tf.maximum(variance_angle, 0.0)
+        return tf.sqrt(variance_angle)
 
     def reset_state(self):
-        K.batch_set_value([(v, K.zeros_like(v)) for v in self.variables])
+        for var in self.variables:
+            var.assign(tf.zeros_like(var))
 
-class AngularDistance(Mean):
-    """
-    Keras metric for Angular Distance (from Cosine Similarity),
-    considering only the last few steps of the input.
-    """
-    def __init__(self,  name='angular_distance', **kwargs):
+class AngularDistance(tf.keras.metrics.Metric):
+    def __init__(self, name='angular_distance', **kwargs):
         super(AngularDistance, self).__init__(name=name, **kwargs)
+        self.sum_angles = self.add_weight(name='sum_angles', initializer='zeros')
+        self.count = self.add_weight(name='count', initializer='zeros')
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        y_true_norm = K.l2_normalize(y_true, axis=-1)
-        y_pred_norm = K.l2_normalize(y_pred, axis=-1)
-        cosine_similarity = K.sum(y_true_norm * y_pred_norm, axis=-1)
+        y_true_norm = tf.math.l2_normalize(y_true, axis=-1)
+        y_pred_norm = tf.math.l2_normalize(y_pred, axis=-1)
+        cosine_similarity = tf.reduce_sum(y_true_norm * y_pred_norm, axis=-1)
         cosine_similarity = tf.clip_by_value(cosine_similarity, -1.0, 1.0)
-        angular_distance = tf.math.acos(cosine_similarity)
-        return super(AngularDistance, self).update_state(angular_distance, sample_weight)
+        angles = tf.acos(cosine_similarity)
+        self.sum_angles.assign_add(tf.reduce_sum(angles))
+        if sample_weight is not None:
+            self.count.assign_add(tf.reduce_sum(sample_weight))
+        else:
+            self.count.assign_add(tf.cast(tf.shape(y_true)[0], tf.float32))
+
+    def result(self):
+        if tf.equal(self.count, 0.0):
+            return 0.0
+        return self.sum_angles / self.count
+
+    def reset_state(self):
+        for var in self.variables:
+            var.assign(tf.zeros_like(var))
+
         
 class R2Score(tf.keras.metrics.Metric):
     """
