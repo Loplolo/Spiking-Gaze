@@ -29,7 +29,10 @@ for gpu in gpus:
 def main(args):
     """Main program entry"""
 
-    IMAGE_SIZE = (224, 224, 1) # Half size for less memory usage
+    if args.eyes_only:
+        IMAGE_SIZE =  (224, 90, 1) # Different shape for eye crops
+    else: 
+        IMAGE_SIZE = (224, 224, 1) # Half size for less memory usage
 
     dataset = load_data(args.dataset_dir, args.test_split, args.train_split, seed=0)
     train_dataset, test_dataset = dataset[:6], dataset[6:]
