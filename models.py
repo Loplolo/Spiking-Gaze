@@ -73,39 +73,48 @@ class NengoGazeModel():
         """
         self.sim.compile(loss={ "probe" : loss } , optimizer=optimizer, metrics={ 'probe' : ['mae', 'mse', R2Score() ,  AngularDistance(),  AngularDistanceSD()]})
 
-    def convert(self, model, scale_fr=1, synapse=None, inference_only=False, swap_activations=None):
+    def convert(self, model, scale_fr=1, synapse=None, inference_only=False, swap_activations=None, probe_all_layers=False):
         """
-        Convert keras model in a nengo_dl one
+        Convert keras model into a nengo_dl model.
         
         model            : Keras model to be converted
         scale_fr         : Scales the firing rate of neurons 
         synapse          : Synaptic filter to be applied on the output of all neurons
         inference_only   : Boolean to save memory in case training is not needed
-        swap_activations : Swaps activations functions
+        swap_activations : Swaps activation functions
+        probe_all_layers : Boolean to indicate if probes should be added to all layers
 
         returns the nengo_dl.Converter object
-        """       
+        """
+        # Convert the model to NengoDL model
         self.converter = nengo_dl.Converter(model, 
-                                    scale_firing_rates=scale_fr, 
-                                    synapse=synapse,
-                                    inference_only = inference_only,
-                                    swap_activations=swap_activations,
-                                    allow_fallback=False
-                                    )
+                                            scale_firing_rates=scale_fr, 
+                                            synapse=synapse,
+                                            inference_only=inference_only,
+                                            swap_activations=swap_activations,
+                                            allow_fallback=False)
+        
+        self.probes = [self.converter.inputs[self.layer_objs_lst[0]]]  # Input layer probe.
 
-        self.probes = [self.converter.inputs[self.layer_objs_lst[0]]] # Input layer probe.
         with self.converter.net:
             nengo_dl.configure_settings(stateful=False)
 
-            # Probe for the first Conv layer.
-            first_conv_probe = nengo.Probe(self.converter.layers[self.layer_objs_lst[1]])
-            self.probes.append(first_conv_probe)
+            # If probe_all_layers flag is set, probe every layer
+            if probe_all_layers:
+                for layer_obj in self.layer_objs_lst[1:]:  # Skip the input layer
+                    probe = nengo.Probe(self.converter.layers[layer_obj])
+                    self.probes.append(probe)
+            else:
+                # Probe for the first Conv layer (second in the list)
+                first_conv_probe = nengo.Probe(self.converter.layers[self.layer_objs_lst[1]])
+                self.probes.append(first_conv_probe)
 
-            # Probe for penultimate dense layer.
-            penltmt_dense_probe = nengo.Probe(self.converter.layers[self.layer_objs_lst[-2]])
-            self.probes.append(penltmt_dense_probe)
+                # Probe for the penultimate dense layer (second to last in the list)
+                penltmt_dense_probe = nengo.Probe(self.converter.layers[self.layer_objs_lst[-2]])
+                self.probes.append(penltmt_dense_probe)
 
-        self.probes.append(self.converter.outputs[self.layer_objs_lst[-1]]) # Output layer probe.
+        # Always probe the output layer
+        self.probes.append(self.converter.outputs[self.layer_objs_lst[-1]])
 
         return self.converter
     
@@ -178,12 +187,13 @@ class NengoGazeModel():
         """
         self.sim.save_params(filename)
 
-    def eval(self, dataset, sfr, collect_spikes_output=True):
+    def eval(self, dataset, sfr, collect_spikes_output=False, plot_output=False):
         """
         Model evaluation loop
 
         dataset               : Tuple containing test image paths and test annotations
         collect_spikes_output : boolean true if spikes need to be collected
+        plot_output           : boolean true to plot spikes and outputs
 
         returns the collected spikes
         """
@@ -224,24 +234,42 @@ class NengoGazeModel():
                 print(str(metric.name) + " : " + str(tf.keras.backend.get_value(metric.result())))
 
             if collect_spikes_output:
-                # Collecting spikes for each image in the first batch.
+                # Initialize counters for this batch
+                max_firing_neurons_timestep = 0
+                min_firing_neurons_timestep = float('inf')
+
                 for i in range(self.batch_size):
-                    spikes.append({
-                        self.probes[1].obj.ensemble.label: sim_data[self.probes[1]][i],
-                        self.probes[2].obj.ensemble.label: sim_data[self.probes[2]][i]
-                    })
+                    total_firing_neurons_timestep = 0
+                    for t in range(self.n_steps):
+                        firing_neurons_timestep = 0
+                        for probe in self.probes:
+                            if probe in sim_data.keys():
+                                spikes.append(sim_data[probe][i])
+                                firing_neurons = np.sum((sim_data[probe][i][t]) > 0)
+                                firing_neurons_timestep += firing_neurons
 
-                # Not collecting the spikes for rest of the batches to save memory.
-                collect_spikes_output = False
+                        # Update max and min firing neurons per timestep
+                        max_firing_neurons_timestep = max(max_firing_neurons_timestep, firing_neurons_timestep)
+                        min_firing_neurons_timestep = min(min_firing_neurons_timestep, firing_neurons_timestep)
+                        total_firing_neurons_timestep += firing_neurons_timestep
+                    average_firing_neurons_timestep = total_firing_neurons_timestep / self.n_steps
+                print(f"Total number of neurons: {self.converter.net.n_neurons}")
+                print(f"Max neurons firing in a single timestep for batch {curr}: {max_firing_neurons_timestep}")
+                print(f"Min neurons firing in a single timestep for batch {curr}: {min_firing_neurons_timestep}")
+                print(f"Average neurons firing in a single timestep for batch {curr}: {average_firing_neurons_timestep / self.batch_size}")
 
-                for probe in self.probes[1:-1]:
-                    self.plot_spikes(probe, spikes, sfr)
+                # collect_spikes_output = False
+
+                if plot_output:
+                    for probe in self.probes[1:-1]:
+                        self.plot_spikes(probe, spikes, sfr)
 
                 # Example plot for the first image
-                self.plot_prediction(y_batch_dict["probe"][0], sim_data[self.probes[-1]][0])
-                self.plot_metrics_timesteps(tf.cast(y_batch_dict["probe"][0], tf.float32), tf.cast(sim_data[self.probes[-1]][0], tf.float32), metrics)
+                    self.plot_prediction(y_batch_dict["probe"][0], sim_data[self.probes[-1]][0])
+                    self.plot_metrics_timesteps(tf.cast(y_batch_dict["probe"][0], tf.float32), tf.cast(sim_data[self.probes[-1]][0], tf.float32), metrics)
 
-                plt.show()
+                    plt.show()
+
 
     def energyEstimates(self, dataset):
         """
@@ -277,7 +305,17 @@ class NengoGazeModel():
         num_neurons   : Number of random neurons for which spikes are to be plotted.
         dt            : The duration of each timestep. Nengo-DL's default duration is 0.001s.
         """
-        lyr_name = probe.obj.ensemble.label
+
+        if isinstance(probe.obj, nengo.Ensemble):
+            lyr_name = probe.obj.label
+        elif isinstance(probe.obj, nengo.Node):
+            lyr_name = probe.obj.label
+        elif hasattr(probe.obj, 'ensemble'):
+            lyr_name = probe.obj.ensemble.label
+
+        if not lyr_name in spikes[test_data_idx].keys():
+            return
+        
         spikes_matrix = spikes[test_data_idx][lyr_name] * sfr * dt
         neurons = np.random.choice(spikes_matrix.shape[1], num_neurons, replace=False)
         spikes_matrix = spikes_matrix[:, neurons]
