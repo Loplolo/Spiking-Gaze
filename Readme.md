@@ -14,7 +14,7 @@ MPIIFaceGaze dataset: https://perceptualui.org/files/datasets/MPIIFaceGaze.zip (
 General usage: 
 
 ```console 
-python main.py [-h] {ann, snn} {train,eval,webcam,show} [--dataset_dir DATASET_DIR] [--calib_path CAMERA_CALIB_FILE] [--train_split TRAIN_SPLIT] [--batch_size BATCH_SIZE] [--epochs EPOCHS] [--lr LEARNING_RATE] [--save SAVE] [--load LOAD] [--n_steps N_STEPS] [--synapse SYNAPSE] [--sfr SCALE_FIRING_RATE]
+python main.py [-h] {ann, snn} {train,eval,webcam,show} [--dataset_dir DATASET_DIR] [--calib_path CAMERA_CALIB_FILE] [--train_split TRAIN_SPLIT] [--test_split TEST_SPLIT] [--batch_size BATCH_SIZE] [--epochs EPOCHS] [--lr LEARNING_RATE] [--save SAVE] [--load LOAD] [--n_steps N_STEPS] [--synapse SYNAPSE] [--sfr SCALE_FIRING_RATE] [--eyes_only]
 ```
 
 Example:
